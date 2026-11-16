@@ -221,7 +221,7 @@ export class TaskManager extends EventEmitter {
   }
 
   async followUp(p: FollowUpParams): Promise<TaskRecord> {
-    const task = this.mustGet(p.taskId)
+    const task = this.resolve(p.taskId, p.sessionId)
     const message = p.message?.trim()
     if (!message) fail(HelperErrors.InvalidInput, 'message is empty.')
     if (task.status === 'running') fail(HelperErrors.TaskBusy, `"${task.label}" is still running. Wait for it to finish, or recall it first.`)
@@ -247,8 +247,9 @@ export class TaskManager extends EventEmitter {
     return { ...task }
   }
 
-  async recall(taskId: string): Promise<TaskRecord> {
-    const task = this.mustGet(taskId)
+  async recall(ref: string, sessionId?: string): Promise<TaskRecord> {
+    const task = this.resolve(ref, sessionId)
+    const taskId = task.id
     if (task.status !== 'running') return { ...task }
     const done = this.wait(taskId)
     if (this.codex && task.threadId && task.turnId) {
@@ -264,8 +265,8 @@ export class TaskManager extends EventEmitter {
     return { ...task }
   }
 
-  status(taskId: string): TaskRecord {
-    return { ...this.mustGet(taskId) }
+  status(ref: string, sessionId?: string): TaskRecord {
+    return { ...this.resolve(ref, sessionId) }
   }
 
   wait(taskId: string): Promise<TaskRecord> {
@@ -278,15 +279,36 @@ export class TaskManager extends EventEmitter {
     })
   }
 
-  transcript(taskId: string, tail?: number): TranscriptResult {
-    const task = this.mustGet(taskId)
-    const all = this.store.readTranscript(taskId)
+  transcript(ref: string, tail?: number, sessionId?: string): TranscriptResult {
+    const task = this.resolve(ref, sessionId)
+    const all = this.store.readTranscript(task.id)
     const entries = tail && tail > 0 ? all.slice(-tail) : all
     return { task: { ...task }, entries, omitted: all.length - entries.length }
   }
 
   list(sessionId?: string): TaskRecord[] {
     return this.store.all().filter(t => !sessionId || t.sessionId === sessionId)
+  }
+
+  // Finds a task by id, or by label (ADR-0018). A label prefers the asking
+  // session's tasks, then running ones, then the newest. While a dispatch runs
+  // in the background Claude only knows its label, not its id.
+  resolve(ref: string, sessionId?: string): TaskRecord {
+    const key = (ref ?? '').trim()
+    const byId = this.store.get(key)
+    if (byId) return byId
+    const named = this.store.all().filter(t => t.label.toLowerCase() === key.toLowerCase())
+    if (named.length) {
+      const mine = named.filter(t => sessionId && t.sessionId === sessionId)
+      const pool = mine.length ? mine : named
+      const running = pool.filter(t => t.status === 'running')
+      if (running.length > 1) fail(HelperErrors.InvalidInput, `${running.length} running tasks are labelled "${key}": ${running.map(t => t.id).join(', ')}. Pass one of these ids.`)
+      return running[0] ?? pool[0]!
+    }
+    if (/^[a-z0-9]{6,12}$/.test(key) && !key.startsWith('task_')) {
+      fail(HelperErrors.UnknownTask, `"${key}" looks like Claude Code's background task id, not a Heinzel task. Use TaskStop with it to cancel the dispatch, or pass the task's label or its task_ id here.`)
+    }
+    fail(HelperErrors.UnknownTask, `No task with id or label "${key}". It may have been pruned.`)
   }
 
   private mustGet(taskId: string): TaskRecord {

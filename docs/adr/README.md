@@ -21,3 +21,4 @@ See [AGENTS.md](../../AGENTS.md) for how and when to write one. Start from [temp
 | [0015](0015-typescript-on-node.md) | TypeScript on Node, with MCP SDK v2 | Accepted |
 | [0016](0016-test-plan.md) | Test plan | Accepted |
 | [0017](0017-runtime-layout-and-lifetimes.md) | Runtime layout and lifetimes | Accepted |
+| [0018](0018-name-tasks-by-label.md) | Tasks can be named by label | Accepted |

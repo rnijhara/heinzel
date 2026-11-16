@@ -24,7 +24,7 @@ export const dispatchInput = z.object({
   worktree: z.boolean().optional().describe('true runs the task in its own git worktree on a new branch. Default false: the session\'s working directory.'),
 })
 
-const taskId = z.string().min(1).describe('The task id from dispatch.')
+const taskId = z.string().min(1).describe('The task id (task_…) or the task\'s label. While a dispatch is still running in the background, use its label.')
 
 export interface WaitHooks {
   // Waits for a task's turn to end and returns the tool result text.

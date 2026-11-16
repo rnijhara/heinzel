@@ -125,9 +125,9 @@ export async function runHelper(opts: HelperOptions = {}) {
           return t
         }
         case 'wait': return tasks.wait(params.taskId)
-        case 'recall': return tasks.recall(params.taskId)
-        case 'status': return tasks.status(params.taskId)
-        case 'transcript': return tasks.transcript(params.taskId, params.tail)
+        case 'recall': return tasks.recall(params.taskId, params.sessionId ?? info.sessionId ?? undefined)
+        case 'status': return tasks.status(params.taskId, params.sessionId ?? info.sessionId ?? undefined)
+        case 'transcript': return tasks.transcript(params.taskId, params.tail, params.sessionId ?? info.sessionId ?? undefined)
         case 'roster': return tasks.roster()
         case 'list': return tasks.list(params?.sessionId)
         case 'shutdown': {

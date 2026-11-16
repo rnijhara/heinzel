@@ -11,7 +11,17 @@ The plugin has two parts:
 - **An MCP server** that holds all the logic: it starts tasks, tracks them, and returns results.
 - **A display-only mod** that shows the tasks in Claude Code. Everything works without it.
 
-The project is in its design phase. There is no code yet. The build order is in `docs/plan.md`.
+Version 0.1.0 is built: M1–M5 in `docs/plan.md`. The code is laid out like this:
+
+- `src/server/`: the per-session relay, which is the MCP server. It holds the tools, the server instructions and the tasks extension.
+- `src/helper/`: the shared helper. It drives `codex app-server` and writes the state files.
+- `src/shared/`: paths, JSON-RPC and the relay-to-helper protocol.
+- `src/setup/`: the script behind `/heinzel-setup`.
+- `mod/`: the display mod, loaded by `hooks/hooks.json`.
+- `test/`: the Node tests (`*.spec.ts`), the fake app-server and the live end-to-end driver.
+- `mod/*.test.tsx`: the mod's tests, run by `claude plugin test`.
+
+Run `npm run check` before committing. Mod changes also need `claude plugin validate .` and `claude plugin test .`.
 
 ## How we make decisions: ADRs
 

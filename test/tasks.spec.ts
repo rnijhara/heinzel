@@ -123,6 +123,19 @@ describe('task manager with the fake app-server', () => {
 
   test('unknown tasks are reported clearly', async () => {
     assert.throws(() => s.tm.status('task_nope'), (e: any) => e.code === HelperErrors.UnknownTask)
+    assert.throws(() => s.tm.status('kswpljim8'), /looks like Claude Code's background task id/)
+  })
+
+  test('tasks can be named by label (ADR-0018)', async () => {
+    const a = await s.tm.dispatch({ brief: 'Sleep [slow:5000]', label: 'Sleeper', cwd: s.dir, sessionId: 'S1' })
+    const other = await s.tm.dispatch({ brief: 'Other session [slow:5000]', label: 'Sleeper', cwd: s.dir, sessionId: 'S2' })
+    assert.equal(s.tm.status('sleeper', 'S1').id, a.id, 'case-insensitive, and the asking session wins')
+    assert.equal(s.tm.status('Sleeper', 'S2').id, other.id)
+    assert.throws(() => s.tm.status('Sleeper', 'S3'), /2 running tasks are labelled "Sleeper"/)
+    const r = await s.tm.recall('Sleeper', 'S1')
+    assert.equal(r.id, a.id)
+    assert.equal(r.status, 'cancelled')
+    await s.tm.recall(other.id)
   })
 
   test('roster lists models and the effective default from config', async () => {

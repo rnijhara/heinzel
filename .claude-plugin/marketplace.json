@@ -1,0 +1,11 @@
+{
+  "name": "heinzel",
+  "owner": { "name": "Roopak Nijhara" },
+  "plugins": [
+    {
+      "name": "heinzel",
+      "source": "./",
+      "description": "Hand work from Claude Code to other coding agents, and get woken up when it's done. Codex first."
+    }
+  ]
+}

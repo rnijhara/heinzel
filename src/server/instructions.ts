@@ -20,12 +20,13 @@ Briefs:
 Waiting:
 - After dispatch or follow_up, carry on with other work or end your turn. Completion wakes you with the result.
 - Never poll: no status on a running task, no sleeps, no watchers.
+- Give every dispatch a short, distinct label. While it runs in the background you have only Claude Code's background task id, not Heinzel's id: refer to the task by its label, and cancel it with TaskStop on the background task or recall with the label.
 
 Follow-ups:
 - Use follow_up to continue the same piece of work on the same thread.
 - Every new review or re-check is a new dispatch. Fix small review findings yourself.
 
-Cleanup: recall a task that was replaced or is no longer needed.
+Cleanup: recall a task (by id or label) that was replaced or is no longer needed.
 
 Questions: dispatched agents never ask the user anything. If a result says the agent is blocked or needs a decision, ask the user, or send a follow_up with what it needs.
 

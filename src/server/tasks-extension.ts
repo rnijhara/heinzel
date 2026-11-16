@@ -8,6 +8,7 @@
 // We also advertise the extension in the handshake and mark the two tools as
 // task-capable in `tools/list`.
 
+import { appendFileSync } from 'node:fs'
 import type { Transport } from '@modelcontextprotocol/server'
 import type { HelperClient } from './helper-client.ts'
 import { formatFinished } from './format.ts'
@@ -51,6 +52,13 @@ export class TaskAwareTransport implements Transport {
   onerror?: (error: Error) => void
   onmessage?: Transport['onmessage']
   sessionId?: string
+
+  // HEINZEL_TRACE_WIRE=<file> logs every message in and out, for debugging.
+  private traceFile = process.env.HEINZEL_TRACE_WIRE
+
+  private trace(dir: '<<' | '>>', msg: unknown) {
+    if (this.traceFile) try { appendFileSync(this.traceFile, `${dir} ${JSON.stringify(msg)}\n`) } catch { /* never fatal */ }
+  }
 
   constructor(inner: Transport, helper: HelperClient) {
     this.inner = inner
@@ -97,10 +105,12 @@ export class TaskAwareTransport implements Transport {
     } else if (id !== undefined && (message.error || message.result)) {
       this.pendingMethods.delete(id)
     }
+    this.trace('>>', message)
     return this.inner.send(message, options)
   }
 
   private reply(id: string | number, result: unknown) {
+    this.trace('>>', { id, result })
     return this.inner.send({ jsonrpc: '2.0', id, result } as any)
   }
 
@@ -109,6 +119,7 @@ export class TaskAwareTransport implements Transport {
   }
 
   private async receive(msg: Msg, extra: any) {
+    this.trace('<<', msg)
     const { id, method, params } = msg
     if (id !== undefined && method) {
       if (method === 'tools/call' && TASK_TOOLS.has(params?.name) && clientSupportsTasks(params) && this.validArgs(params)) {
