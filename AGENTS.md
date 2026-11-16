@@ -27,6 +27,10 @@ Heinzel is a Claude Code plugin that hands work to other coding agents (Codex fi
 - **Undecided items go in `docs/open-questions.md`,** not in an ADR. Don't build as if they were decided.
 - **The ADR goes in the same commit as the code it describes.**
 
+## Commits and branches
+- Conventional Commits, for example `fix(helper): …`. The body says why.
+- Branches: `<type>/<short-summary>`, for example `fix/helper-lock-race`.
+
 ## Writing
 - Be concise everywhere: ADRs, docs, comments, tool text.
 - Say it once, in plain words. Cut anything a reader wouldn't miss.
