@@ -76,6 +76,7 @@ export class TaskManager extends EventEmitter {
   private waiters = new Map<string, Array<(t: TaskRecord) => void>>()
   private lastMessage = new Map<string, string>()
   private rosterCache: { key: string; roster: RosterAgent } | null = null
+  private settling = new Set<Promise<void>>()
 
   constructor(store: StateStore, opts: TaskManagerOptions) {
     super()
@@ -317,8 +318,12 @@ export class TaskManager extends EventEmitter {
     return t
   }
 
-  shutdown() {
-    this.codex?.kill()
+  // Stops Codex and waits for it to exit and for in-flight task endings
+  // (worktree clean-up, state writes) to settle.
+  async shutdown(): Promise<void> {
+    const codex = this.codex
+    this.codex = null
+    await Promise.all([codex?.stop(), ...this.settling])
   }
 
   // --- Codex events -------------------------------------------------------
@@ -408,6 +413,7 @@ export class TaskManager extends EventEmitter {
       for (const resolve of list) resolve({ ...task })
       this.emit('finished', task)
     }
-    void settle()
+    const p = settle().finally(() => this.settling.delete(p))
+    this.settling.add(p)
   }
 }

@@ -164,11 +164,13 @@ export async function runHelper(opts: HelperOptions = {}) {
     clearInterval(pruner)
     if (idleTimer) clearTimeout(idleTimer)
     for (const t of tasks.list()) if (t.status === 'running') await tasks.recall(t.id).catch(() => {})
-    tasks.shutdown()
-    store.flush()
+    await tasks.shutdown()
+    store.close()
     for (const peer of relays.keys()) peer.close()
     server.close()
+    log('stopped')
     rmSync(p.socket, { force: true })
+    // Last: a missing lock means this helper has finished writing.
     rmSync(p.lock, { force: true })
     process.exit(0)
   }

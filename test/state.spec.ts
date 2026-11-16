@@ -11,7 +11,7 @@ import { HELPER_PROTOCOL, STATE_FORMAT, VERSION, type TaskRecord } from '../src/
 import { StateStore, readIndex } from '../src/helper/state.ts'
 import { acquireLock } from '../src/helper/main.ts'
 import { HelperClient } from '../src/server/helper-client.ts'
-import { tempDir, testEnv, until } from './helpers.ts'
+import { stopHelper, tempDir, testEnv } from './helpers.ts'
 
 function record(id: string, over: Partial<TaskRecord> = {}): TaskRecord {
   const now = Date.now()
@@ -133,8 +133,7 @@ describe('version handshake', () => {
       assert.equal(hello.version, VERSION, 'a helper of the relay\'s version took over')
     } finally {
       client.close()
-      try { process.kill(Number(readFileSync(p.lock, 'utf8')), 'SIGTERM') } catch { /* gone */ }
-      await until(() => !existsSync(p.lock), 5000).catch(() => {})
+      await stopHelper(env)
       h.cleanup()
     }
   })

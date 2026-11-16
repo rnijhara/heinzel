@@ -19,7 +19,8 @@ function setup(extra: Record<string, string> = {}) {
   const store = new StateStore(p)
   const lines: string[] = []
   const tm = new TaskManager(store, { codexArgv: codexArgv(env), env, log: l => lines.push(l), worktreesDir: p.worktrees })
-  return { dir, env, p, store, tm, lines, cleanup: () => { tm.shutdown(); cleanup() } }
+  // Waits for Codex to exit and the store's last write before removing the dir.
+  return { dir, env, p, store, tm, lines, cleanup: async () => { await tm.shutdown(); store.close(); cleanup() } }
 }
 
 describe('server request answers (ADR 8)', () => {
@@ -173,7 +174,7 @@ describe('app-server health (ADR 4)', () => {
       assert.equal((await s.tm.wait(fu.id)).status, 'done')
       assert.ok(readFileSync(join(s.dir, 'fake.log'), 'utf8').includes('"method":"thread/resume"'))
     } finally {
-      s.cleanup()
+      await s.cleanup()
     }
   })
 
@@ -182,7 +183,7 @@ describe('app-server health (ADR 4)', () => {
     try {
       await assert.rejects(s.tm.dispatch({ brief: 'x', cwd: s.dir, sessionId: 'S1' }), /Codex CLI is installed and signed in/)
     } finally {
-      s.cleanup()
+      await s.cleanup()
     }
   })
 })
@@ -215,7 +216,7 @@ describe('worktrees (ADR 10)', () => {
       assert.ok(existsSync(fu.worktree!.top))
       await s.tm.wait(fu.id)
     } finally {
-      s.cleanup()
+      await s.cleanup()
     }
   })
 
@@ -224,7 +225,7 @@ describe('worktrees (ADR 10)', () => {
     try {
       await assert.rejects(s.tm.dispatch({ brief: 'x', cwd: s.dir, sessionId: 'S1', worktree: true }), /needs a git repository/)
     } finally {
-      s.cleanup()
+      await s.cleanup()
     }
   })
 })

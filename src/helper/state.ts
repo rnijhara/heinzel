@@ -32,6 +32,7 @@ export class StateStore {
   readonly paths: Paths
   private tasks = new Map<string, TaskRecord>()
   private timer: NodeJS.Timeout | null = null
+  private closed = false
   retentionMs: number
 
   constructor(paths: Paths, retentionDays = DEFAULT_RETENTION_DAYS) {
@@ -82,6 +83,7 @@ export class StateStore {
   }
 
   append(id: string, entry: TranscriptEntry) {
+    if (this.closed) return
     appendFileSync(this.transcriptPath(id), JSON.stringify(entry) + '\n', { mode: 0o600 })
   }
 
@@ -108,11 +110,18 @@ export class StateStore {
   }
 
   private flushSoon() {
-    if (this.timer) return
+    if (this.timer || this.closed) return
     this.timer = setTimeout(() => this.flush(), 200)
   }
 
+  // Final write; nothing is written after this.
+  close() {
+    this.flush()
+    this.closed = true
+  }
+
   flush() {
+    if (this.closed) return
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
     const idx: TasksIndex = {

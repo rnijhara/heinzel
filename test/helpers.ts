@@ -1,9 +1,10 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RpcPeer } from '../src/shared/jsonrpc.ts'
+import { paths } from '../src/shared/paths.ts'
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url))
 export const FAKE_CODEX = join(ROOT, 'test/fake-codex/fake-app-server.ts')
@@ -72,3 +73,46 @@ export const CLAUDE_META = (tasks: boolean) => ({
     ...(tasks ? { extensions: { 'io.modelcontextprotocol/tasks': {} } } : {}),
   },
 })
+
+function alive(pid: number) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err: any) {
+    return err.code === 'EPERM'
+  }
+}
+
+// Stops the helper for this environment and waits until it has exited, so
+// nothing writes into the temp dir while a test removes it.
+export async function stopHelper(env: NodeJS.ProcessEnv) {
+  let pid: number
+  try {
+    pid = Number(readFileSync(paths(env).lock, 'utf8'))
+  } catch {
+    return
+  }
+  if (!pid) return
+  try {
+    process.kill(pid, 'SIGTERM')
+  } catch {
+    return
+  }
+  await until(() => !alive(pid), 20000, 20)
+}
+
+// Stops a relay and waits for its process to exit.
+export async function stopRelay(r: { child: ChildProcess }) {
+  const c = r.child
+  if (c.exitCode !== null || c.signalCode !== null) return
+  const gone = new Promise(resolve => c.once('exit', resolve))
+  c.kill()
+  await gone
+}
+
+// Stops relays, then their helper, then removes the temp dir.
+export async function teardown(env: NodeJS.ProcessEnv, relays: { child: ChildProcess }[], cleanup: () => void) {
+  await Promise.all(relays.map(stopRelay))
+  await stopHelper(env)
+  cleanup()
+}

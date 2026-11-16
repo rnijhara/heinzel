@@ -9,7 +9,7 @@ import { after, before, describe, test } from 'node:test'
 import { paths } from '../src/shared/paths.ts'
 import { INSTRUCTIONS } from '../src/server/instructions.ts'
 import { TOOL_DESCRIPTIONS } from '../src/server/tools.ts'
-import { CLAUDE_META, startRelay, tempDir, testEnv, until } from './helpers.ts'
+import { CLAUDE_META, startRelay, stopRelay, teardown, tempDir, testEnv, until } from './helpers.ts'
 
 type Relay = ReturnType<typeof startRelay>
 
@@ -32,13 +32,7 @@ describe('relay over stdio, plain calls (automatic backgrounding path)', () => {
     env = testEnv(home.dir, { CLAUDE_CODE_SESSION_ID: 'session-A' })
     r = startRelay(env, home.dir)
   })
-  after(async () => {
-    r.child.kill()
-    await r.peer.request('noop').catch(() => {})
-    // Stop the helper the relay started.
-    try { process.kill(Number(readFileSync(paths(env).lock, 'utf8')), 'SIGTERM') } catch { /* gone */ }
-    home.cleanup()
-  })
+  after(() => teardown(env, [r], home.cleanup))
 
   test('server/discover negotiates 2026-07-28, sends the instructions and advertises tasks', async () => {
     const res: any = await handshake(r, false)
@@ -126,11 +120,7 @@ describe('relay with MCP tasks (io.modelcontextprotocol/tasks)', () => {
     r = startRelay(env, home.dir)
     await handshake(r, true)
   })
-  after(() => {
-    r.child.kill()
-    try { process.kill(Number(readFileSync(paths(env).lock, 'utf8')), 'SIGTERM') } catch { /* gone */ }
-    home.cleanup()
-  })
+  after(() => teardown(env, [r], home.cleanup))
 
   test('dispatch answers with a task at once, and tasks/get returns the result', async () => {
     const started = Date.now()
@@ -192,10 +182,7 @@ describe('shared helper (ADR 4)', () => {
       const idx = JSON.parse(readFileSync(p.tasksIndex, 'utf8'))
       assert.match(text(await call(b, 'status', { task_id: idx.tasks[0].id })), /is done/)
     } finally {
-      a.child.kill()
-      b.child.kill()
-      try { process.kill(Number(readFileSync(paths(base).lock, 'utf8')), 'SIGTERM') } catch { /* gone */ }
-      home.cleanup()
+      await teardown(base, [a, b], home.cleanup)
     }
   })
 
@@ -208,7 +195,7 @@ describe('shared helper (ADR 4)', () => {
       await handshake(r1, false)
       await call(r1, 'roster', {})
       const pid1 = Number(readFileSync(p.lock, 'utf8'))
-      r1.child.kill()
+      await stopRelay(r1)
       await until(() => !existsSync(p.lock), 5000)
       assert.ok(!existsSync(p.socket))
       const r2 = startRelay(env, home.dir)
@@ -216,10 +203,10 @@ describe('shared helper (ADR 4)', () => {
       await call(r2, 'roster', {})
       const pid2 = Number(readFileSync(p.lock, 'utf8'))
       assert.notEqual(pid1, pid2)
-      r2.child.kill()
+      await stopRelay(r2)
       await until(() => !existsSync(p.lock), 5000)
     } finally {
-      home.cleanup()
+      await teardown(env, [], home.cleanup)
     }
   })
 })
@@ -258,9 +245,7 @@ describe('replay of recorded Claude Code 2.1.325 requests', () => {
           assert.match(res.content[0].text, /is done/)
         }
       } finally {
-        r.child.kill()
-        try { process.kill(Number(readFileSync(paths(env).lock, 'utf8')), 'SIGTERM') } catch { /* gone */ }
-        home.cleanup()
+        await teardown(env, [r], home.cleanup)
       }
     })
   }

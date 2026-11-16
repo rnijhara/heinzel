@@ -162,4 +162,12 @@ export class CodexAppServer extends EventEmitter {
     if (!this.child.killed) this.child.kill('SIGTERM')
     setTimeout(() => { if (!this.exited) this.child.kill('SIGKILL') }, 3000).unref()
   }
+
+  // Stops the process and resolves once it has exited (SIGKILL after 3 s).
+  stop(): Promise<void> {
+    if (this.exited || this.child.exitCode !== null || this.child.signalCode !== null) return Promise.resolve()
+    const gone = new Promise<void>(resolve => this.child.once('exit', () => resolve()))
+    this.kill()
+    return gone
+  }
 }
