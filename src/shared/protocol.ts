@@ -57,8 +57,8 @@ export type TranscriptEntry =
   | { t: number; kind: 'brief'; text: string; model: string | null; effort: string | null; cwd: string }
   | { t: number; kind: 'follow_up'; text: string }
   | { t: number; kind: 'message'; text: string; final: boolean }
-  | { t: number; kind: 'command'; command: string; exitCode: number | null; output: string | null }
-  | { t: number; kind: 'edit'; files: { path: string; kind: string }[] }
+  | { t: number; kind: 'command'; command: string; exitCode: number | null; output: string | null; title?: string }
+  | { t: number; kind: 'edit'; files: { path: string; kind: string; added?: number; removed?: number }[] }
   | { t: number; kind: 'tool'; name: string; status: string }
   | { t: number; kind: 'status'; status: TaskStatus; error?: string | null }
 

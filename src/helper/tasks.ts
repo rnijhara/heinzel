@@ -19,7 +19,7 @@ import {
 import { CodexAppServer } from './codex.ts'
 import type { StateStore } from './state.ts'
 import { createWorktree, removeIfUnchanged, restoreWorktree } from './worktree.ts'
-import type { ThreadItem, Turn } from '../../protocol/codex/0.167.2/ts/v2/index.ts'
+import type { CommandAction, ThreadItem, Turn } from '../../protocol/codex/0.167.2/ts/v2/index.ts'
 
 // Sent to every task as developer instructions (ADR 8).
 export const CHILD_RULES = [
@@ -61,6 +61,40 @@ function firstLine(text: string, max = 160) {
   return line.length > max ? line.slice(0, max - 1) + '…' : line
 }
 
+// A short title for a command from what Codex parsed it into, as Claude Code
+// titles a tool call: "Read a.ts, b.ts", "Searched for "x" in src". Null when
+// any part is a command Codex couldn't parse, so the command itself is shown.
+export function commandTitle(actions: CommandAction[], cwd: string): string | null {
+  if (!actions.length || actions.some(a => a.type === 'unknown')) return null
+  const rel = (p: string | null) => (!p || p === cwd ? '.' : p.startsWith(cwd + '/') ? p.slice(cwd.length + 1) : p)
+  const reads = actions.filter(a => a.type === 'read').map(a => a.name)
+  const parts: string[] = []
+  if (reads.length) parts.push(reads.length > 3 ? `Read ${reads.length} files` : `Read ${reads.join(', ')}`)
+  for (const a of actions) {
+    if (a.type === 'listFiles') parts.push(`Listed files in ${rel(a.path)}`)
+    if (a.type === 'search') parts.push(a.query ? `Searched for "${a.query}" in ${rel(a.path)}` : `Searched ${rel(a.path)}`)
+  }
+  const joined = parts.join(', ')
+  return joined.length > 120 ? joined.slice(0, 119) + '…' : joined
+}
+
+// Lines added and removed by one file change. Codex sends a unified diff for
+// an update, and the file's text for an add or a delete.
+export function lineCounts(diff: string | undefined, kind: string): { added: number; removed: number } {
+  const lines = (diff ?? '').split('\n')
+  if (lines.at(-1) === '') lines.pop()
+  if (!lines.some(l => l.startsWith('@@'))) {
+    return kind === 'delete' ? { added: 0, removed: lines.length } : { added: lines.length, removed: 0 }
+  }
+  let added = 0
+  let removed = 0
+  for (const l of lines) {
+    if (l.startsWith('+') && !l.startsWith('+++')) added++
+    else if (l.startsWith('-') && !l.startsWith('---')) removed++
+  }
+  return { added, removed }
+}
+
 function clip(text: string | null | undefined, max = OUTPUT_LIMIT) {
   if (!text) return null
   return text.length > max ? text.slice(0, max) + `\n… (${text.length - max} more characters)` : text
@@ -75,8 +109,12 @@ export class TaskManager extends EventEmitter {
   private loaded = new Set<string>()
   private waiters = new Map<string, Array<(t: TaskRecord) => void>>()
   private lastMessage = new Map<string, string>()
-  private rosterCache: { key: string; roster: RosterAgent } | null = null
+  private modelCache: { key: string; models: Awaited<ReturnType<CodexAppServer['modelList']>> } | null = null
   private settling = new Set<Promise<void>>()
+  // Each finished task's clean-up; a follow-up waits for it (worktree removal).
+  private settlingByTask = new Map<string, Promise<void>>()
+  // Tasks a follow-up has claimed but not yet started, so a second one is refused.
+  private claimed = new Set<string>()
 
   constructor(store: StateStore, opts: TaskManagerOptions) {
     super()
@@ -121,21 +159,25 @@ export class TaskManager extends EventEmitter {
 
   // --- Roster (ADR 9) --------------------------------------------------
 
-  async roster(): Promise<Roster> {
-    return { agents: [await this.codexRoster()] }
+  async roster(cwd?: string): Promise<Roster> {
+    return { agents: [await this.codexRoster(cwd)] }
   }
 
-  private async codexRoster(): Promise<RosterAgent> {
+  // The model list is cached per Codex version and user config. Defaults are
+  // read each time from the config that applies in `cwd`, project config included.
+  private async codexRoster(cwd?: string): Promise<RosterAgent> {
     const codex = await this.ensureCodex()
     let mtime = 0
     try { mtime = statSync(join(this.opts.env.CODEX_HOME || join(this.opts.env.HOME ?? '', '.codex'), 'config.toml')).mtimeMs } catch { /* no config */ }
     const key = `${codex.version}:${mtime}`
-    if (this.rosterCache?.key === key) return this.rosterCache.roster
-    const [models, config] = await Promise.all([codex.modelList(), codex.configRead().catch(() => null)])
-    const visible = models.filter(m => !m.hidden)
+    if (this.modelCache?.key !== key) {
+      this.modelCache = { key, models: (await codex.modelList()).filter(m => !m.hidden) }
+    }
+    const visible = this.modelCache.models
+    const config = await codex.configRead(cwd).catch(() => null)
     const defaultModel = config?.config.model ?? visible.find(m => m.isDefault)?.id ?? null
     const chosen = visible.find(m => m.id === defaultModel)
-    const roster: RosterAgent = {
+    return {
       agent: 'codex',
       version: codex.version,
       defaultModel,
@@ -147,13 +189,11 @@ export class TaskManager extends EventEmitter {
         defaultEffort: m.defaultReasoningEffort,
       })),
     }
-    this.rosterCache = { key, roster }
-    return roster
   }
 
-  private async validate(model: string | undefined, effort: string | undefined) {
+  private async validate(model: string | undefined, effort: string | undefined, cwd: string) {
     if (!model && !effort) return
-    const roster = await this.codexRoster()
+    const roster = await this.codexRoster(cwd)
     const name = model ?? roster.defaultModel
     const m = roster.models.find(x => x.id === name)
     if (model && !m) {
@@ -170,7 +210,7 @@ export class TaskManager extends EventEmitter {
     const brief = p.brief?.trim()
     if (!brief) fail(HelperErrors.InvalidInput, 'brief is empty. Write the whole task in it: the agent sees nothing else.')
     const codex = await this.ensureCodex()
-    await this.validate(p.model, p.effort)
+    await this.validate(p.model, p.effort, p.cwd)
 
     const id = `task_${randomBytes(4).toString('hex')}`
     const label = p.label?.trim() || defaultLabel(brief)
@@ -192,10 +232,9 @@ export class TaskManager extends EventEmitter {
       createdAt: now, updatedAt: now, finishedAt: null,
       lastLine: 'Starting…', result: null, error: null,
     }
-    this.store.put(task, { now: true })
-    this.store.append(id, { t: now, kind: 'brief', text: brief, model: task.model, effort: task.effort, cwd })
-
     try {
+      this.store.put(task, { now: true })
+      this.store.append(id, { t: now, kind: 'brief', text: brief, model: task.model, effort: task.effort, cwd })
       const started = await codex.threadStart({ ...THREAD_SETTINGS, cwd, ...(p.model ? { model: p.model } : {}) })
       task.threadId = started.thread.id
       task.model = started.model
@@ -225,27 +264,34 @@ export class TaskManager extends EventEmitter {
     const task = this.resolve(p.taskId, p.sessionId)
     const message = p.message?.trim()
     if (!message) fail(HelperErrors.InvalidInput, 'message is empty.')
-    if (task.status === 'running') fail(HelperErrors.TaskBusy, `"${task.label}" is still running. Wait for it to finish, or recall it first.`)
+    if (task.status === 'running' || this.claimed.has(task.id)) fail(HelperErrors.TaskBusy, `"${task.label}" is still running. Wait for it to finish, or recall it first.`)
     if (!task.threadId) fail(HelperErrors.InvalidInput, `"${task.label}" never started a thread, so there's nothing to continue. Dispatch a new task instead.`)
-    const codex = await this.ensureCodex()
-    if (task.worktree?.removed) {
-      task.worktree = await restoreWorktree(task.worktree)
-    }
-    if (!this.loaded.has(task.threadId)) {
-      await codex.threadResume(task.threadId, { ...THREAD_SETTINGS, cwd: task.cwd, ...(task.model ? { model: task.model } : {}) })
-      this.loaded.add(task.threadId)
-      this.byThread.set(task.threadId, task.id)
-    }
-    const now = Date.now()
-    Object.assign(task, { status: 'running', turns: task.turns + 1, finishedAt: null, result: null, error: null, lastLine: 'Continuing…', updatedAt: now, sessionId: p.sessionId ?? task.sessionId })
-    this.store.put(task, { now: true })
-    this.store.append(task.id, { t: now, kind: 'follow_up', text: message })
+    // Claim the task before the first await, so a concurrent follow-up is refused.
+    this.claimed.add(task.id)
     try {
-      await this.startTurn(codex, task, message)
-    } catch (err) {
-      this.finish(task, 'failed', null, `Could not continue the task: ${(err as Error).message}`)
+      await this.settlingByTask.get(task.id)
+      const codex = await this.ensureCodex()
+      if (task.worktree?.removed) {
+        task.worktree = await restoreWorktree(task.worktree)
+      }
+      if (!this.loaded.has(task.threadId)) {
+        await codex.threadResume(task.threadId, { ...THREAD_SETTINGS, cwd: task.cwd, ...(task.model ? { model: task.model } : {}) })
+        this.loaded.add(task.threadId)
+        this.byThread.set(task.threadId, task.id)
+      }
+      const now = Date.now()
+      Object.assign(task, { status: 'running', turns: task.turns + 1, finishedAt: null, result: null, error: null, lastLine: 'Continuing…', updatedAt: now, sessionId: p.sessionId ?? task.sessionId })
+      try {
+        this.store.put(task, { now: true })
+        this.store.append(task.id, { t: now, kind: 'follow_up', text: message })
+        await this.startTurn(codex, task, message)
+      } catch (err) {
+        this.finish(task, 'failed', null, `Could not continue the task: ${(err as Error).message}`)
+      }
+      return { ...task }
+    } finally {
+      this.claimed.delete(task.id)
     }
-    return { ...task }
   }
 
   async recall(ref: string, sessionId?: string): Promise<TaskRecord> {
@@ -272,7 +318,11 @@ export class TaskManager extends EventEmitter {
 
   wait(taskId: string): Promise<TaskRecord> {
     const task = this.mustGet(taskId)
-    if (task.status !== 'running') return Promise.resolve({ ...task })
+    if (task.status !== 'running') {
+      // Still cleaning up: answer once the worktree outcome is known.
+      const settling = this.settlingByTask.get(taskId)
+      return settling ? settling.then(() => ({ ...task })) : Promise.resolve({ ...task })
+    }
     return new Promise(resolve => {
       const list = this.waiters.get(taskId) ?? []
       list.push(resolve)
@@ -349,12 +399,13 @@ export class TaskManager extends EventEmitter {
         break
       case 'commandExecution': {
         const command = item.commandActions?.[0]?.command ?? item.command
-        entry = { t, kind: 'command', command, exitCode: item.exitCode, output: clip(item.aggregatedOutput) }
+        const title = commandTitle(item.commandActions ?? [], task.cwd)
+        entry = { t, kind: 'command', command, exitCode: item.exitCode, output: clip(item.aggregatedOutput), ...(title ? { title } : {}) }
         line = firstLine(`$ ${command}`)
         break
       }
       case 'fileChange': {
-        const files = item.changes.map(c => ({ path: c.path, kind: c.kind.type }))
+        const files = item.changes.map(c => ({ path: c.path, kind: c.kind.type, ...lineCounts(c.diff, c.kind.type) }))
         entry = { t, kind: 'edit', files }
         line = firstLine(`Edited ${files.map(f => f.path.split('/').pop()).join(', ')}`)
         break
@@ -374,11 +425,11 @@ export class TaskManager extends EventEmitter {
       default:
         return
     }
-    this.store.append(task.id, entry)
+    this.persist(task.id, () => this.store.append(task.id, entry))
     if (line && task.status === 'running') {
       task.lastLine = line
       task.updatedAt = t
-      this.store.put(task)
+      this.persist(task.id, () => this.store.put(task))
       this.emit('progress', task, line)
     }
   }
@@ -398,22 +449,40 @@ export class TaskManager extends EventEmitter {
     Object.assign(task, { status, result, error, finishedAt: now, updatedAt: now })
     task.lastLine = status === 'done' ? firstLine(result ?? 'Done') : status === 'cancelled' ? 'Cancelled' : firstLine(error ?? 'Failed')
     this.lastMessage.delete(task.id)
-    this.store.append(task.id, { t: now, kind: 'status', status, error })
-    this.store.put(task, { now: true })
+    // A failed write (say, the state dir was deleted) must not stop the wake-up.
+    this.persist(task.id, () => {
+      this.store.append(task.id, { t: now, kind: 'status', status, error })
+      this.store.put(task, { now: true })
+    })
     const settle = async () => {
-      if (task.worktree && !task.worktree.removed) {
-        const removed = await removeIfUnchanged(task.worktree)
-        if (removed) {
-          task.worktree = { ...task.worktree, removed: true }
-          this.store.put(task, { now: true })
+      try {
+        if (task.worktree && !task.worktree.removed) {
+          const removed = await removeIfUnchanged(task.worktree)
+          if (removed) {
+            task.worktree = { ...task.worktree, removed: true }
+            this.persist(task.id, () => this.store.put(task, { now: true }))
+          }
         }
+      } finally {
+        const list = this.waiters.get(task.id) ?? []
+        this.waiters.delete(task.id)
+        for (const resolve of list) resolve({ ...task })
+        this.emit('finished', task)
       }
-      const list = this.waiters.get(task.id) ?? []
-      this.waiters.delete(task.id)
-      for (const resolve of list) resolve({ ...task })
-      this.emit('finished', task)
     }
-    const p = settle().finally(() => this.settling.delete(p))
+    const p: Promise<void> = settle().catch(err => this.opts.log(`clean-up of ${task.id} failed: ${(err as Error).message}`)).finally(() => {
+      this.settling.delete(p)
+      if (this.settlingByTask.get(task.id) === p) this.settlingByTask.delete(task.id)
+    })
     this.settling.add(p)
+    this.settlingByTask.set(task.id, p)
+  }
+
+  private persist(taskId: string, write: () => void) {
+    try {
+      write()
+    } catch (err) {
+      this.opts.log(`could not save state for ${taskId}: ${(err as Error).message}`)
+    }
   }
 }

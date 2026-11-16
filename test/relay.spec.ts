@@ -108,6 +108,16 @@ describe('relay over stdio, plain calls (automatic backgrounding path)', () => {
     assert.ok(cancelled)
     void pending
   })
+
+  test('a call cancelled while its task is still starting recalls the task', async () => {
+    const pending = call(r, 'dispatch', { brief: 'Long [slow:20000]', label: 'Cancel early' }).catch(e => e)
+    // Cancel at once, before the helper has answered the dispatch.
+    r.peer.notify('notifications/cancelled', { requestId: (r.peer as any).nextId - 1, reason: 'TaskStop' })
+    const p = paths(env)
+    const cancelled = await until(() => JSON.parse(readFileSync(p.tasksIndex, 'utf8')).tasks.find((t: any) => t.label === 'Cancel early' && t.status === 'cancelled'), 8000)
+    assert.ok(cancelled)
+    void pending
+  })
 })
 
 describe('relay with MCP tasks (io.modelcontextprotocol/tasks)', () => {

@@ -10,6 +10,7 @@
 //   [ask]        send a user-input request and an elicitation, report answers
 //   [write:F]    create file F in the thread's cwd
 //   [silent]     finish without a final message
+//   [orphan]     close stdout but stay alive, writing the pid to FAKE_CODEX_PID_FILE
 // FAKE_CODEX_LOG, when set, receives every line in and out.
 
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
@@ -118,6 +119,13 @@ async function runTurn(t: Thread, turnId: string, text: string) {
     await sleep(20)
     process.exit(1)
   }
+  if (text.includes('[orphan]')) {
+    if (process.env.FAKE_CODEX_PID_FILE) writeFileSync(process.env.FAKE_CODEX_PID_FILE, String(process.pid))
+    process.stdout.on('error', () => {})
+    process.stdout.end()
+    setInterval(() => {}, 1000)
+    return
+  }
   const slow = text.match(/\[slow:(\d+)\]/)
   if (slow) {
     const end = Date.now() + Number(slow[1])
@@ -195,8 +203,13 @@ rl.on('line', line => {
           additionalSpeedTiers: [], serviceTiers: [], defaultServiceTier: null, availableAccessPrograms: null, isDefault: m.isDefault,
         })),
       })
-    case 'config/read':
-      return respond(id, 'config/read', { config: { model: process.env.FAKE_CODEX_DEFAULT_MODEL ?? 'fake-big', model_reasoning_effort: 'medium' }, origins: {}, layers: null })
+    case 'config/read': {
+      // FAKE_CODEX_PROJECT_DIR stands in for a project whose config picks fake-small.
+      const project = process.env.FAKE_CODEX_PROJECT_DIR
+      const inProject = project && typeof params?.cwd === 'string' && params.cwd.startsWith(project)
+      const model = inProject ? 'fake-small' : process.env.FAKE_CODEX_DEFAULT_MODEL ?? 'fake-big'
+      return respond(id, 'config/read', { config: { model, model_reasoning_effort: inProject ? 'low' : 'medium' }, origins: {}, layers: null })
+    }
     case 'thread/start': {
       const t: Thread = { id: uuid(), cwd: params.cwd ?? process.cwd(), model: params.model ?? 'fake-big', turns: 0, active: null }
       threads.set(t.id, t)

@@ -2,8 +2,10 @@
 // handshake with an older helper.
 
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { RpcPeer } from '../src/shared/jsonrpc.ts'
 import { paths } from '../src/shared/paths.ts'
@@ -11,7 +13,7 @@ import { HELPER_PROTOCOL, STATE_FORMAT, VERSION, type TaskRecord } from '../src/
 import { StateStore, readIndex } from '../src/helper/state.ts'
 import { acquireLock } from '../src/helper/main.ts'
 import { HelperClient } from '../src/server/helper-client.ts'
-import { stopHelper, tempDir, testEnv } from './helpers.ts'
+import { ROOT, sleep, stopHelper, tempDir, testEnv } from './helpers.ts'
 
 function record(id: string, over: Partial<TaskRecord> = {}): TaskRecord {
   const now = Date.now()
@@ -97,6 +99,52 @@ describe('lock', () => {
       writeFileSync(file, '999999')
       assert.equal(acquireLock(file), true, 'a dead pid is stale')
       assert.equal(readFileSync(file, 'utf8'), String(process.pid))
+    } finally {
+      h.cleanup()
+    }
+  })
+})
+
+// Starts helpers-to-be that all try the lock at the same moment; returns how many got it.
+async function raceForLock(file: string, n: number): Promise<number> {
+  const go = `${file}.go`
+  const script = `
+    import { existsSync } from 'node:fs'
+    import { acquireLock } from ${JSON.stringify(join(ROOT, 'src/helper/main.ts'))}
+    while (!existsSync(${JSON.stringify(go)})) await new Promise(r => setTimeout(r, 1))
+    const got = acquireLock(${JSON.stringify(file)})
+    process.stdout.write(got ? 'yes' : 'no')
+    // Stay alive so the others see a live owner.
+    await new Promise(r => setTimeout(r, 500))
+  `
+  const kids = Array.from({ length: n }, () => {
+    const c = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'pipe', 'inherit'] })
+    let out = ''
+    c.stdout!.on('data', b => { out += b })
+    return new Promise<string>(resolve => c.on('exit', () => resolve(out)))
+  })
+  await sleep(500)
+  writeFileSync(go, '')
+  const outs = await Promise.all(kids)
+  return outs.filter(o => o === 'yes').length
+}
+
+describe('lock races', () => {
+  test('helpers starting together: exactly one gets the lock', async () => {
+    const h = tempDir()
+    try {
+      assert.equal(await raceForLock(`${h.dir}/helper.lock`, 8), 1)
+    } finally {
+      h.cleanup()
+    }
+  })
+
+  test('helpers starting together over a stale lock: exactly one gets it', async () => {
+    const h = tempDir()
+    try {
+      const file = `${h.dir}/helper.lock`
+      writeFileSync(file, '999999')
+      assert.equal(await raceForLock(file, 8), 1)
     } finally {
       h.cleanup()
     }

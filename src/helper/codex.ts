@@ -47,6 +47,9 @@ export function answerServerRequest(method: string, _params: unknown): unknown {
     case 'execCommandApproval':
     case 'applyPatchApproval':
       return { decision: { denied: { rejection: 'Heinzel tasks run unattended; no one is available to approve this.' } } }
+    case 'item/permissions/requestApproval':
+      // Grants nothing beyond the sandbox.
+      return { permissions: {}, scope: 'turn' }
     case 'item/tool/requestUserInput':
       return { answers: {} }
     case 'mcpServer/elicitation/request':
@@ -80,7 +83,11 @@ export class CodexAppServer extends EventEmitter {
     })
     child.on('exit', (code, signal) => this.onExit(`exited (code ${code}, signal ${signal})`))
     child.on('error', err => this.onExit(`failed to start: ${err.message}`))
-    this.peer.on('close', () => this.onExit('closed its output'))
+    // Closed output makes the app-server unusable even if it lives on: retire it.
+    this.peer.on('close', () => {
+      this.onExit('closed its output')
+      this.kill()
+    })
   }
 
   static async start(opts: CodexOptions): Promise<CodexAppServer> {
@@ -158,14 +165,20 @@ export class CodexAppServer extends EventEmitter {
     return this.control<ConfigReadResponse>('config/read', cwd ? { cwd } : {})
   }
 
+  // Whether the process itself has ended; `exited` also covers closed output.
+  private get processGone() {
+    return this.child.exitCode !== null || this.child.signalCode !== null || this.child.pid === undefined
+  }
+
   kill() {
+    if (this.processGone) return
     if (!this.child.killed) this.child.kill('SIGTERM')
-    setTimeout(() => { if (!this.exited) this.child.kill('SIGKILL') }, 3000).unref()
+    setTimeout(() => { if (!this.processGone) this.child.kill('SIGKILL') }, 3000).unref()
   }
 
   // Stops the process and resolves once it has exited (SIGKILL after 3 s).
   stop(): Promise<void> {
-    if (this.exited || this.child.exitCode !== null || this.child.signalCode !== null) return Promise.resolve()
+    if (this.processGone) return Promise.resolve()
     const gone = new Promise<void>(resolve => this.child.once('exit', () => resolve()))
     this.kill()
     return gone

@@ -60,7 +60,7 @@ export function registerTools(server: McpServer, helper: HelperClient, cwd: () =
     annotations: { readOnlyHint: true },
   }, async () => {
     try {
-      return textResult(formatRoster(await helper.call<Roster>('roster')))
+      return textResult(formatRoster(await helper.call<Roster>('roster', { cwd: cwd() })))
     } catch (err) {
       return errorResult(err)
     }

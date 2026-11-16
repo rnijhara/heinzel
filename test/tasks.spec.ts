@@ -2,15 +2,15 @@
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { paths } from '../src/shared/paths.ts'
 import { HelperErrors } from '../src/shared/protocol.ts'
 import { answerServerRequest, codexArgv } from '../src/helper/codex.ts'
 import { StateStore } from '../src/helper/state.ts'
-import { TaskManager, defaultLabel } from '../src/helper/tasks.ts'
-import { FAKE_CODEX, gitRepo, tempDir, testEnv } from './helpers.ts'
+import { TaskManager, commandTitle, defaultLabel, lineCounts } from '../src/helper/tasks.ts'
+import { FAKE_CODEX, gitRepo, sleep, tempDir, testEnv, until } from './helpers.ts'
 
 function setup(extra: Record<string, string> = {}) {
   const { dir, cleanup } = tempDir()
@@ -29,12 +29,28 @@ describe('server request answers (ADR 8)', () => {
     assert.deepEqual(answerServerRequest('item/fileChange/requestApproval', {}), { decision: 'decline' })
     assert.deepEqual(answerServerRequest('item/tool/requestUserInput', {}), { answers: {} })
     assert.deepEqual(answerServerRequest('mcpServer/elicitation/request', {}), { action: 'decline', content: null, _meta: null })
+    assert.deepEqual(answerServerRequest('item/permissions/requestApproval', {}), { permissions: {}, scope: 'turn' })
     assert.throws(() => answerServerRequest('account/chatgptAuthTokens/refresh', {}))
   })
 
   test('codex argv defaults and override', () => {
     assert.deepEqual(codexArgv({}), ['codex', 'app-server'])
     assert.deepEqual(codexArgv({ HEINZEL_CODEX_ARGV: '["node","x.ts"]' }), ['node', 'x.ts'])
+  })
+
+  test('edit line counts from a diff or a whole file', () => {
+    assert.deepEqual(lineCounts('@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n', 'update'), { added: 2, removed: 1 })
+    assert.deepEqual(lineCounts('one\ntwo\n', 'add'), { added: 2, removed: 0 })
+    assert.deepEqual(lineCounts('one\n', 'delete'), { added: 0, removed: 1 })
+    assert.deepEqual(lineCounts('', 'update'), { added: 0, removed: 0 })
+  })
+
+  test('command titles come from the actions Codex parsed', () => {
+    assert.equal(commandTitle([{ type: 'read', command: 'cat a.md', name: 'a.md', path: '/r/a.md' }, { type: 'read', command: 'cat b.ts', name: 'b.ts', path: '/r/src/b.ts' }], '/r'), 'Read a.md, b.ts')
+    assert.equal(commandTitle([{ type: 'search', command: 'rg x src', query: 'x', path: '/r/src' }], '/r'), 'Searched for "x" in src')
+    assert.equal(commandTitle([{ type: 'listFiles', command: 'ls', path: null }], '/r'), 'Listed files in .')
+    assert.equal(commandTitle([{ type: 'read', command: 'cat a', name: 'a', path: '/r/a' }, { type: 'unknown', command: 'make' }], '/r'), null)
+    assert.equal(commandTitle([], '/r'), null)
   })
 
   test('default labels are short', () => {
@@ -112,6 +128,30 @@ describe('task manager with the fake app-server', () => {
     await s.tm.wait(t.id)
   })
 
+  test('two follow-ups at once: one runs, the other is refused', async () => {
+    const t = await s.tm.dispatch({ brief: 'First', cwd: s.dir, sessionId: 'S1' })
+    await s.tm.wait(t.id)
+    const results = await Promise.allSettled([
+      s.tm.followUp({ taskId: t.id, message: 'A [slow:200]', sessionId: 'S1' }),
+      s.tm.followUp({ taskId: t.id, message: 'B [slow:200]', sessionId: 'S1' }),
+    ])
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, 1)
+    const refused = results.find(r => r.status === 'rejected') as PromiseRejectedResult
+    assert.equal(refused.reason.code, HelperErrors.TaskBusy)
+    assert.equal((await s.tm.wait(t.id)).turns, 2)
+  })
+
+  test('a deleted state dir does not stop the wake-up', async () => {
+    const own = setup()
+    try {
+      const t = await own.tm.dispatch({ brief: 'Long [slow:300]', cwd: own.dir, sessionId: 'S1' })
+      rmSync(own.p.tasksDir, { recursive: true, force: true })
+      assert.equal((await own.tm.wait(t.id)).status, 'done')
+    } finally {
+      await own.cleanup()
+    }
+  })
+
   test('recall interrupts a running task', async () => {
     const t = await s.tm.dispatch({ brief: 'Long [slow:10000]', cwd: s.dir, sessionId: 'S1' })
     const started = Date.now()
@@ -149,6 +189,18 @@ describe('task manager with the fake app-server', () => {
     assert.deepEqual(codex.models[1]!.efforts, ['low', 'medium'])
   })
 
+  test('defaults come from the config that applies in the task folder', async () => {
+    const project = setup({ FAKE_CODEX_PROJECT_DIR: '/project' })
+    try {
+      assert.equal((await project.tm.roster('/project/sub')).agents[0]!.defaultModel, 'fake-small')
+      assert.equal((await project.tm.roster('/elsewhere')).agents[0]!.defaultModel, 'fake-big')
+      // fake-small doesn't support high, so the project's default model decides.
+      await assert.rejects(project.tm.dispatch({ brief: 'x', effort: 'high', cwd: '/project', sessionId: 'S1' }), /fake-small doesn't support effort "high"/)
+    } finally {
+      await project.cleanup()
+    }
+  })
+
   test('dispatch validates model and effort against the roster', async () => {
     await assert.rejects(s.tm.dispatch({ brief: 'x', model: 'gpt-nope', cwd: s.dir, sessionId: 'S1' }), /Unknown model "gpt-nope". Available Codex models: fake-big, fake-small/)
     await assert.rejects(s.tm.dispatch({ brief: 'x', model: 'fake-small', effort: 'high', cwd: s.dir, sessionId: 'S1' }), /fake-small doesn't support effort "high". Supported: low, medium/)
@@ -173,6 +225,22 @@ describe('app-server health (ADR 4)', () => {
       const fu = await s.tm.followUp({ taskId: t.id, message: 'Retry', sessionId: 'S1' })
       assert.equal((await s.tm.wait(fu.id)).status, 'done')
       assert.ok(readFileSync(join(s.dir, 'fake.log'), 'utf8').includes('"method":"thread/resume"'))
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  test('an app-server that closes its output but stays alive is killed', async () => {
+    const s = setup()
+    const pidFile = join(s.dir, 'fake.pid')
+    s.env.FAKE_CODEX_PID_FILE = pidFile
+    try {
+      const t = await s.tm.dispatch({ brief: 'Go quiet [orphan]', cwd: s.dir, sessionId: 'S1' })
+      const done = await s.tm.wait(t.id)
+      assert.equal(done.status, 'failed')
+      assert.match(done.error!, /closed its output/)
+      const pid = Number(readFileSync(pidFile, 'utf8'))
+      await until(() => { try { process.kill(pid, 0); return false } catch { return true } }, 6000)
     } finally {
       await s.cleanup()
     }
@@ -215,6 +283,26 @@ describe('worktrees (ADR 10)', () => {
       const fu = await s.tm.followUp({ taskId: clean.id, message: 'Look again', sessionId: 'S1' })
       assert.ok(existsSync(fu.worktree!.top))
       await s.tm.wait(fu.id)
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  test('a follow-up during clean-up waits for it and keeps its worktree', async () => {
+    const s = setup()
+    try {
+      const repo = join(s.dir, 'repo')
+      execFileSync('mkdir', ['-p', repo])
+      gitRepo(repo)
+      const t = await s.tm.dispatch({ brief: 'Look [slow:200]', cwd: repo, sessionId: 'S1', worktree: true })
+      const first = s.tm.wait(t.id)
+      await until(() => s.tm.status(t.id).status !== 'running', 5000, 1)
+      const fu = await s.tm.followUp({ taskId: t.id, message: 'Look again [slow:300]', sessionId: 'S1' })
+      assert.equal((await first).status, 'done', 'the first wait reports the finished turn, not the follow-up')
+      assert.ok(existsSync(fu.worktree!.top), 'the follow-up has its worktree')
+      await sleep(100)
+      assert.ok(existsSync(fu.worktree!.top), 'clean-up did not remove it under the running turn')
+      assert.equal((await s.tm.wait(t.id)).status, 'done')
     } finally {
       await s.cleanup()
     }

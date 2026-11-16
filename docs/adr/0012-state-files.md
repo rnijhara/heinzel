@@ -1,6 +1,6 @@
 # 12. Task state in files
 
-- Status: Accepted
+- Status: Superseded in part by ADR 19
 - Date: 2026-11-16
 
 ## Context

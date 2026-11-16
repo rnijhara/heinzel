@@ -1,7 +1,7 @@
 // The shared helper: one per agent account, serving every session's relay over
 // a local socket (ADR 4). Started on demand by the first relay that needs it.
 
-import { appendFileSync, closeSync, openSync, readFileSync, rmSync, statSync, truncateSync, writeSync } from 'node:fs'
+import { appendFileSync, linkSync, readFileSync, rmSync, statSync, truncateSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { RpcError, RpcPeer, ErrorCodes } from '../shared/jsonrpc.ts'
 import { paths as resolvePaths, type Paths } from '../shared/paths.ts'
@@ -25,22 +25,60 @@ function pidAlive(pid: number) {
   }
 }
 
-// Takes the lock file, or returns false when a live helper already holds it.
-export function acquireLock(file: string): boolean {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const fd = openSync(file, 'wx', 0o600)
-      writeSync(fd, String(process.pid))
-      closeSync(fd)
-      return true
-    } catch (err: any) {
-      if (err.code !== 'EEXIST') throw err
-      const pid = Number(readFileSync(file, 'utf8').trim())
-      if (pid && pidAlive(pid)) return false
-      rmSync(file, { force: true })
-    }
+function readPid(file: string): number | null {
+  try {
+    return Number(readFileSync(file, 'utf8').trim()) || 0
+  } catch (err: any) {
+    if (err.code === 'ENOENT') return null
+    throw err
   }
-  return false
+}
+
+// Creates `target` only if it doesn't exist, with `source`'s contents already in it.
+function tryLink(source: string, target: string): boolean {
+  try {
+    linkSync(source, target)
+    return true
+  } catch (err: any) {
+    if (err.code === 'EEXIST') return false
+    throw err
+  }
+}
+
+// A takeover guard older than this was left by a helper that died mid-takeover.
+const GUARD_STALE_MS = 10_000
+
+// Takes the lock file, or returns false when a live helper already holds it.
+// The lock is only ever created by linking a file that already holds our PID,
+// so no one reads it empty. Removing a stale lock happens under a guard file,
+// so only one helper at a time can remove it.
+export function acquireLock(file: string): boolean {
+  const mine = `${file}.${process.pid}`
+  const guard = `${file}.takeover`
+  writeFileSync(mine, String(process.pid), { mode: 0o600 })
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (tryLink(mine, file)) return true
+      const owner = readPid(file)
+      if (owner === null) continue
+      if (owner && pidAlive(owner)) return false
+      if (!tryLink(mine, guard)) {
+        // Another helper is taking over; it wins, unless it died doing so.
+        const age = Date.now() - (statSync(guard, { throwIfNoEntry: false })?.mtimeMs ?? 0)
+        if (age < GUARD_STALE_MS) return false
+        rmSync(guard, { force: true })
+        continue
+      }
+      try {
+        if (readPid(file) === owner) rmSync(file, { force: true })
+      } finally {
+        rmSync(guard, { force: true })
+      }
+    }
+    return false
+  } finally {
+    rmSync(mine, { force: true })
+  }
 }
 
 export interface HelperOptions {
@@ -128,7 +166,7 @@ export async function runHelper(opts: HelperOptions = {}) {
         case 'recall': return tasks.recall(params.taskId, params.sessionId ?? info.sessionId ?? undefined)
         case 'status': return tasks.status(params.taskId, params.sessionId ?? info.sessionId ?? undefined)
         case 'transcript': return tasks.transcript(params.taskId, params.tail, params.sessionId ?? info.sessionId ?? undefined)
-        case 'roster': return tasks.roster()
+        case 'roster': return tasks.roster(params?.cwd)
         case 'list': return tasks.list(params?.sessionId)
         case 'shutdown': {
           const running = tasks.runningCount()

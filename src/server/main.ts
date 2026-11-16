@@ -50,7 +50,9 @@ export function createRelay(env: NodeJS.ProcessEnv = process.env) {
     const heartbeat = setInterval(() => send('Still working…'), HEARTBEAT_MS)
     const signal: AbortSignal | undefined = ctx?.mcpReq?.signal
     const onAbort = () => { void helper.call('recall', { taskId: task.id }).catch(() => {}) }
-    signal?.addEventListener('abort', onAbort, { once: true })
+    // The call may have been cancelled while the task was starting.
+    if (signal?.aborted) onAbort()
+    else signal?.addEventListener('abort', onAbort, { once: true })
     try {
       const done = await helper.call<TaskRecord>('wait', { taskId: task.id })
       return formatFinished(done, settingsMissing ? SETTINGS_NOTE : undefined)

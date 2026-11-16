@@ -20,10 +20,10 @@ export type Task = {
 }
 
 export type Entry =
-  | { t: number; kind: 'brief' | 'follow_up'; text: string }
+  | { t: number; kind: 'brief' | 'follow_up'; text: string; cwd?: string }
   | { t: number; kind: 'message'; text: string; final: boolean }
-  | { t: number; kind: 'command'; command: string; exitCode: number | null; output: string | null }
-  | { t: number; kind: 'edit'; files: { path: string; kind: string }[] }
+  | { t: number; kind: 'command'; command: string; exitCode: number | null; output: string | null; title?: string }
+  | { t: number; kind: 'edit'; files: { path: string; kind: string; added?: number; removed?: number }[] }
   | { t: number; kind: 'tool'; name: string; status: string }
   | { t: number; kind: 'status'; status: Status; error?: string | null }
 
@@ -37,6 +37,7 @@ declare module 'claude-code' {
       transcript: Shaped<Entry[]>
       bandHiddenAt: number
       now: number
+      expanded: string[]
     }
   }
 }
