@@ -55,3 +55,4 @@ Facts checked on 2026-11-16:
 
 - 2026-11-16: Proposed.
 - 2026-11-16: Accepted.
+- 2026-11-16: M3 answered the open question. SDK v2 doesn't let a handler return a task result, so the tasks extension is a transport wrapper under `serveStdio` (ADR-0017).
