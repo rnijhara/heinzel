@@ -27,6 +27,7 @@ const index = {
 const transcript = [
   { t: NOW - 600_000, kind: 'brief', text: ['Write a README for the repo.', ...Array.from({ length: 9 }, (_, n) => `line ${n + 2}`)].join('\n'), model: 'gpt-6-luna', effort: 'low', cwd: '/repo' },
   { t: NOW - 590_000, kind: 'command', command: 'ls', exitCode: 0, output: 'src\n', title: 'Listed files in .' },
+  { t: NOW - 587_000, kind: 'command', command: 'rg -n heinzel notes.md', exitCode: 1, output: '' },
   { t: NOW - 585_000, kind: 'command', command: 'npm test', exitCode: 2, output: 'a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\nl\n' },
   { t: NOW - 580_000, kind: 'edit', files: [{ path: '/wt/x/README.md', kind: 'add', added: 12, removed: 0 }] },
   { t: NOW - 570_000, kind: 'message', text: 'README written.', final: true },
@@ -67,7 +68,7 @@ function seed(on: any, files: Record<string, string> = FILES, opened: string[] =
   })
   on('command.register', () => ({ value: { command: 'heinzel' } }))
   on('ui.open', (_: any, e: any) => {
-    opened.push(e.id)
+    opened.push(`${e.id}:${e.backgroundColor}`)
     return { value: { isPlaced: true } }
   })
 }
@@ -92,15 +93,32 @@ test('the panel lists tasks, opens a transcript and goes back', async ($, on) =>
   }
 })
 
-test('on the terminal, the transcript is drawn as Claude Code draws its own', async ($, on) => {
+test('on the terminal, tool calls fold too, with Claude Code\'s ⏺ and ⎿ marks', async ($, on) => {
   seed(on)
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'open-task_done0001' })
-  expect((await ui.find({ type: 'Text', text: /^Bash\(ls\)$/ }))).toBeDefined()
+  const group = `g-${NOW - 590_000}-1`
+  expect((await ui.find({ key: group }))?.text).toBe('Ran 3 commands, edited 1 file +12 · 1 failed ▸')
+  // The brief is framed like Claude Code's own prompt box.
+  // No colour inside the line: the terminal inverts it under the pointer.
+  expect(await ui.find({ type: 'Text', text: /failed/ })).toBeUndefined()
+  expect(((await ui.find({ type: 'Text', text: /^ \+12$/ })) as any).props.color).toBeUndefined()
+  const brief: any = await ui.find({ key: 'b0' })
+  expect(brief.props.borderColor).toBe('promptBorder')
+  const dot: any = await ui.find({ type: 'Text', text: /^⏺ $/ })
+  expect(dot).toBeDefined()
+  // Green while only some calls failed: red means the whole group failed.
+  expect(dot.props.color).toBe('success')
+  expect((await ui.find({ type: 'Text', text: /^✻ Done in 30s$/ }))).toBeDefined()
+  await ui.press({ key: group })
+  expect((await ui.find({ type: 'Text', text: /^⎿  $/ }))).toBeDefined()
+  expect((await ui.find({ key: `c-${NOW - 590_000}-1-0` }))?.text).toBe('Listed files in . ▸')
+  // A search that found nothing is not a failure.
+  expect((await ui.find({ key: `c-${NOW - 590_000}-1-1` }))?.text).toBe('rg -n heinzel notes.md · no matches ▸')
+  await ui.press({ key: `c-${NOW - 590_000}-1-0` })
+  expect((await ui.find({ type: 'Code' }))).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /^src$/ }))).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /^Write\(\/wt\/x\/README.md\)$/ }))).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /^Exit code 2$/ }))).toBeDefined()
   await ui.unmount()
 })
 
@@ -116,13 +134,13 @@ test('on the desktop, tool calls fold into one line that opens on a press', asyn
   expect((await ui.find({ type: 'Text', text: /line 10$/ }))).toBeDefined()
   expect((await ui.find({ key: `p-${NOW - 600_000}` }))?.text).toBe('Show less')
   const group = `g-${NOW - 590_000}-1`
-  expect((await ui.find({ key: group }))?.text).toBe('Ran 2 commands, edited 1 file +12 · 1 failed ▸')
+  expect((await ui.find({ key: group }))?.text).toBe('Ran 3 commands, edited 1 file +12 · 1 failed ▸')
   expect(await ui.find({ type: 'Text', text: /^\$ ls$/ })).toBeUndefined()
   await ui.press({ key: group })
   expect((await ui.find({ key: group }))?.text).toContain('▾')
   // Each call is a line of its own, titled from what Codex parsed, else the command.
   expect((await ui.find({ key: `c-${NOW - 590_000}-1-0` }))?.text).toBe('Listed files in . ▸')
-  expect((await ui.find({ key: `c-${NOW - 590_000}-1-1` }))?.text).toBe('npm test · exit 2 ▸')
+  expect((await ui.find({ key: `c-${NOW - 590_000}-1-2` }))?.text).toBe('npm test · exit 2 ▸')
   expect((await ui.find({ type: 'Text', text: /^Wrote \/wt\/x\/README.md \+12$/ }))).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^src$/ })).toBeUndefined()
   await ui.press({ key: `c-${NOW - 590_000}-1-0` })
@@ -130,14 +148,14 @@ test('on the desktop, tool calls fold into one line that opens on a press', asyn
   expect((await ui.find({ type: 'Text', text: /^src$/ }))).toBeDefined()
   // An untitled call already shows its command on its line, so no code block repeats it.
   await ui.press({ key: `c-${NOW - 590_000}-1-0` })
-  await ui.press({ key: `c-${NOW - 590_000}-1-1` })
+  await ui.press({ key: `c-${NOW - 590_000}-1-2` })
   expect(await ui.find({ type: 'Code' })).toBeUndefined()
   expect((await ui.find({ type: 'Text', text: /^a\nb\nc/ }))).toBeDefined()
   // Long output opens in place: the pane is the only thing that scrolls.
-  expect((await ui.find({ key: `o-${NOW - 590_000}-1-1` }))?.text).toBe('… +4 lines')
+  expect((await ui.find({ key: `o-${NOW - 590_000}-1-2` }))?.text).toBe('… +4 lines')
   expect(await ui.find({ type: 'Text', text: /l$/ })).toBeUndefined()
-  await ui.press({ key: `o-${NOW - 590_000}-1-1` })
-  expect((await ui.find({ key: `o-${NOW - 590_000}-1-1` }))?.text).toBe('Show less')
+  await ui.press({ key: `o-${NOW - 590_000}-1-2` })
+  expect((await ui.find({ key: `o-${NOW - 590_000}-1-2` }))?.text).toBe('Show less')
   expect((await ui.find({ type: 'Text', text: /^a\n[\s\S]*\nl$/ }))).toBeDefined()
   await ui.unmount()
 })
@@ -173,6 +191,7 @@ test('/heinzel opens the panel', async ($, on) => {
   seed(on, FILES, opened)
   await $.session.start({ cwd: '/repo', surface: 'desktop', isInteractive: true })
   const res = await $.command.run({ command: 'heinzel', args: '' })
-  expect(opened).toContain('heinzel')
+  // Transparent, so the panel shows the theme's background like the transcript.
+  expect(opened).toContain('heinzel:transparent')
   expect(res.text).toContain('Heinzel panel opened')
 })

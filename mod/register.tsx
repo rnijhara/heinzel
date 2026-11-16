@@ -6,8 +6,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Entry, Selected, Task } from './types'
-import type { Block, Turn } from './model'
-import { EDIT_TOOL, MARK, STATUS_COLOR, age, bandCounts, bandText, bandVisible, blocks, clip, duration, outputHead, preview, parseIndex, parseTranscript, relPath, signature, sortTasks, summary, turns } from './model'
+import type { Block } from './model'
+import { EDIT_TOOL, MARK, STATUS_COLOR, age, bandCounts, bandText, bandVisible, blocks, clip, commandFailed, duration, outputHead, preview, parseIndex, parseTranscript, relPath, noMatches, signature, sortTasks, summary } from './model'
 
 const PANE = 'heinzel'
 const POLL_MS = 1500
@@ -69,7 +69,8 @@ async function select($: EngineInterface, task: Task | null) {
 }
 
 async function openPane($: EngineInterface) {
-  await $.ui.open({ id: PANE, title: 'Heinzel' })
+  // Transparent, so the pane shows the theme's own background, as the transcript does.
+  await $.ui.open({ id: PANE, title: 'Heinzel', backgroundColor: 'transparent' })
 }
 
 async function hideBand($: EngineInterface) {
@@ -99,10 +100,8 @@ export const register: Register = on => {
 
     if (selected && task) {
       const entries: Entry[] = await read($, transcriptAtom)
-      const ui = { Box, Text, Markdown }
       const brief = entries.find(e => e.kind === 'brief')
       const cwd = brief?.kind === 'brief' ? brief.cwd ?? null : null
-      const list = turns(entries)
       const elapsed = (task.finishedAt ?? now) - task.createdAt
       return (
         <Box flexDirection="column" gap={1}>
@@ -117,9 +116,7 @@ export const register: Register = on => {
             {task.branch && <Text dimColor>Worktree {task.worktree} on {task.branch}</Text>}
           </Box>
           {entries.length === 0 && <Text dimColor>No transcript yet.</Text>}
-          {e.surface === 'terminal'
-            ? list.flatMap((turn, i) => renderTurn(turn, i, i === list.length - 1 && task.status === 'running', cwd, now, ui))
-            : renderBlocks($, task, entries, cwd, now, await read($, expandedAtom), { ...ui, Button, Code }, Number(e.props?.bodyColumns) || 60)}
+          {renderBlocks($, task, entries, cwd, now, await read($, expandedAtom), { Box, Text, Markdown, Button, Code }, Number(e.props?.bodyColumns) || 60, e.surface === 'terminal')}
         </Box>
       )
     }
@@ -129,7 +126,9 @@ export const register: Register = on => {
         {tasks.length === 0 && <Text dimColor>No Heinzel tasks yet. Ask Claude to dispatch one.</Text>}
         {tasks.map(t => (
           <Box key={t.id} flexDirection="column">
-            <Button key={`open-${t.id}`} plain label={`${MARK[t.status]} ${clip(t.label, 60)}`} onPress={() => select($, t)} />
+            <Button key={`open-${t.id}`} plain onPress={() => select($, t)}>
+              <Text color={STATUS_COLOR[t.status]}>{MARK[t.status]}</Text> {clip(t.label, 60)}
+            </Button>
             <Text dimColor wrap="truncate-end">
               {age(now - t.createdAt)} · {t.status}{t.lastLine ? ` · ${clip(t.lastLine, 120)}` : ''}
             </Text>
@@ -155,31 +154,10 @@ export const register: Register = on => {
   })
 }
 
-type UI = { Box: any; Text: any; Markdown: any }
-type DesktopUI = UI & { Button: any; Code: any }
+type UI = { Box: any; Text: any; Markdown: any; Button: any; Code: any }
 
-// The transcript drawn the way Claude Code draws its own: the brief as a
-// prompt, the agent's text and tool calls as ⏺ rows, results under ⎿.
-function renderTurn(turn: Turn, i: number, live: boolean, cwd: string | null, now: number, ui: UI) {
-  const { Box, Text } = ui
-  const rows: any[] = []
-  if (turn.opener) {
-    rows.push(
-      <Box key={`p${i}`} flexDirection="row" alignItems="flex-start">
-        <Text dimColor>{'> '}</Text>
-        <Box flexDirection="column" flexShrink={1}><Text>{turn.opener.text}</Text></Box>
-      </Box>,
-    )
-  }
-  turn.items.forEach((entry, j) => {
-    const row = renderEntry(entry, turn.opener?.t ?? null, cwd, ui)
-    if (row) rows.push(<Box key={`e${i}-${j}`} flexDirection="column">{row}</Box>)
-  })
-  if (live) rows.push(<Text key={`w${i}`} color="claude">✻ Working… <Text dimColor>({duration(now - (turn.opener?.t ?? now))})</Text></Text>)
-  return rows
-}
-
-// A ⏺ row: the dot, then content that wraps under itself.
+// A ⏺ row, as the terminal draws a message or a tool call: the dot, then
+// content that wraps under itself.
 function dotRow(ui: UI, color: string | undefined, head: any, body?: any) {
   const { Box, Text } = ui
   return (
@@ -193,7 +171,7 @@ function dotRow(ui: UI, color: string | undefined, head: any, body?: any) {
   )
 }
 
-// The ⎿ line under a row, indented as Claude Code indents a tool result.
+// The ⎿ line under a ⏺ row, indented as the terminal indents a tool result.
 function resultRow(ui: UI, content: any) {
   const { Box, Text } = ui
   return (
@@ -204,66 +182,17 @@ function resultRow(ui: UI, content: any) {
   )
 }
 
-function renderEntry(entry: Entry, startedAt: number | null, cwd: string | null, ui: UI) {
-  const { Box, Text, Markdown } = ui
-  switch (entry.kind) {
-    case 'message':
-      return dotRow(ui, undefined, <Markdown text={entry.text} />)
-    case 'command': {
-      const failed = entry.exitCode !== null && entry.exitCode !== 0
-      const out = outputHead(entry.output, failed)
-      return dotRow(ui, failed ? 'error' : 'success',
-        <Text><Text bold>Bash</Text>({clip(entry.command, 300)})</Text>,
-        resultRow(ui, (
-          <Box flexDirection="column">
-            {failed && <Text color="error">Exit code {entry.exitCode}</Text>}
-            {out ? <Text dimColor>{out.text}</Text> : !failed && <Text dimColor>(No output)</Text>}
-            {out && out.hidden > 0 && <Text dimColor>… +{out.hidden} lines</Text>}
-          </Box>
-        )),
-      )
-    }
-    case 'edit':
-      return (
-        <Box flexDirection="column" gap={1}>
-          {entry.files.map((f, k) => {
-            const path = relPath(f.path, cwd)
-            const tool = EDIT_TOOL[f.kind] ?? 'Update'
-            const verb = tool === 'Write' ? 'Wrote' : tool === 'Delete' ? 'Deleted' : 'Updated'
-            return (
-              <Box key={`f${k}`} flexDirection="column">
-                {dotRow(ui, 'success', <Text><Text bold>{tool}</Text>({path})</Text>, resultRow(ui, <Text dimColor>{verb} {path}</Text>))}
-              </Box>
-            )
-          })}
-        </Box>
-      )
-    case 'tool': {
-      const failed = entry.status === 'failed'
-      return dotRow(ui, failed ? 'error' : 'success', <Text bold>{entry.name}</Text>, failed ? resultRow(ui, <Text color="error">Failed</Text>) : undefined)
-    }
-    case 'status': {
-      const took = startedAt !== null ? ` in ${duration(entry.t - startedAt)}` : ''
-      const word = entry.status === 'done' ? 'Done' : entry.status === 'failed' ? 'Failed' : entry.status === 'cancelled' ? 'Cancelled' : 'Running'
-      return (
-        <Box flexDirection="column">
-          <Text color={STATUS_COLOR[entry.status]}>✻ {word}{took}</Text>
-          {entry.error && resultRow(ui, <Text color="error">{entry.error}</Text>)}
-        </Box>
-      )
-    }
-    default:
-      return null
-  }
-}
-
-// The desktop app's look: plain text, prompts in a bubble, and each run of
-// tool calls folded into one line that opens on a press.
-function renderBlocks($: EngineInterface, task: Task, entries: Entry[], cwd: string | null, now: number, open: string[], ui: DesktopUI, columns: number) {
+// The transcript in Claude Code's own look for the surface (ADR 20, ADR 21).
+// Both fold each run of tool calls into one line that opens on a press; the
+// terminal adds its ⏺ and ⎿ marks, the other surfaces draw plain text.
+// Every color is a theme key, so the view follows the selected theme.
+function renderBlocks($: EngineInterface, task: Task, entries: Entry[], cwd: string | null, now: number, open: string[], ui: UI, columns: number, term: boolean) {
   const { Box, Text, Markdown, Button } = ui
   const list = blocks(entries)
-  // Opens or closes one group, call or output, by its id.
+  // Opens or closes one group, call, output or brief, by its id.
   const flip = (id: string) => update($, expandedAtom, (keys: string[]) => (keys.includes(id) ? keys.filter(k => k !== id) : [...keys, id]))
+  // Colour inside a button, only where hovering doesn't invert it.
+  const tint = (color: string) => (term ? undefined : color)
   const rows = list.map((b, i) => {
     switch (b.kind) {
       case 'prompt': {
@@ -271,8 +200,8 @@ function renderBlocks($: EngineInterface, task: Task, entries: Entry[], cwd: str
         const id = `${task.id}:p:${b.entry.t}`
         const full = open.includes(id)
         const short = preview(b.entry.text)
-        return (
-          <Box key={`b${i}`} flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1} gap={1}>
+        const body = (
+          <Box flexDirection="column" gap={1}>
             <Text>{full || !short.cut ? b.entry.text : short.text}</Text>
             {short.cut && (
               <Button key={`p-${b.entry.t}`} plain dimColor onPress={() => flip(id)}>
@@ -281,42 +210,71 @@ function renderBlocks($: EngineInterface, task: Task, entries: Entry[], cwd: str
             )}
           </Box>
         )
+        // Framed so the brief stands out: on the terminal like Claude Code's
+        // own prompt box, elsewhere as a bubble.
+        return term
+          ? (
+            <Box key={`b${i}`} flexDirection="row" alignItems="flex-start" borderStyle="round" borderColor="promptBorder" paddingX={1}>
+              <Text dimColor>{'> '}</Text>
+              <Box flexDirection="column" flexShrink={1}>{body}</Box>
+            </Box>
+          )
+          : <Box key={`b${i}`} flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>{body}</Box>
       }
       case 'message':
-        return <Box key={`b${i}`} flexDirection="column"><Markdown text={b.text} /></Box>
+        return (
+          <Box key={`b${i}`} flexDirection="column">
+            {term ? dotRow(ui, undefined, <Markdown text={b.text} />) : <Markdown text={b.text} />}
+          </Box>
+        )
       case 'group': {
         const id = `${task.id}:${b.key}`
         const isOpen = open.includes(id)
         const s = summary(b.items)
-        const toggle = () => flip(id)
+        // No red inside the line: a partial failure isn't a failed task, and
+        // the terminal inverts a button's colours under the pointer.
+        const head = (
+          <Button key={`g-${b.key}`} plain dimColor onPress={() => flip(id)}>
+            {s.text}
+            {s.added > 0 && <Text color={tint('diffAdded')}> +{s.added}</Text>}
+            {s.removed > 0 && <Text color={tint('diffRemoved')}> −{s.removed}</Text>}
+            {s.failed > 0 && ` · ${s.failed} failed`}
+            {isOpen ? ' ▾' : ' ▸'}
+          </Button>
+        )
+        const calls = (inset: number) => b.items.map((item, k) => (
+          <Box key={`d${k}`} flexDirection="column">
+            {renderCall(item, `${b.key}-${k}`, `${id}:${k}`, open, flip, cwd, ui, columns - inset, term)}
+          </Box>
+        ))
+        if (term) {
+          return (
+            <Box key={`b${i}`} flexDirection="column">
+              {/* Red only when every call failed; a partial failure shows in the line. */}
+              {dotRow(ui, s.calls > 0 && s.failed === s.calls ? 'error' : 'success', head, isOpen && resultRow(ui, <Box flexDirection="column" gap={1}>{calls(8)}</Box>))}
+            </Box>
+          )
+        }
         return (
           <Box key={`b${i}`} flexDirection="column" gap={1}>
-            <Button key={`g-${b.key}`} plain dimColor onPress={toggle}>
-              {s.text}
-              {s.added > 0 && <Text color="diffAdded"> +{s.added}</Text>}
-              {s.removed > 0 && <Text color="diffRemoved"> −{s.removed}</Text>}
-              {s.failed > 0 && <Text color="error"> · {s.failed} failed</Text>}
-              {isOpen ? ' ▾' : ' ▸'}
-            </Button>
+            {head}
             {isOpen && (
               <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1} paddingY={1} gap={1}>
-                {b.items.map((item, k) => (
-                  <Box key={`d${k}`} flexDirection="column">
-                    {renderCall(item, `${b.key}-${k}`, `${id}:${k}`, open, flip, cwd, ui, columns - 12)}
-                  </Box>
-                ))}
+                {calls(12)}
               </Box>
             )}
           </Box>
         )
       }
       case 'status':
-        return <Box key={`b${i}`} flexDirection="column">{renderStatus(b, ui)}</Box>
+        return <Box key={`b${i}`} flexDirection="column">{renderStatus(b, ui, term)}</Box>
     }
   })
   if (task.status === 'running') {
     const start = [...list].reverse().find((b): b is Extract<Block, { kind: 'prompt' }> => b.kind === 'prompt')?.entry.t ?? task.createdAt
-    rows.push(<Text key="working" dimColor>Working… ({duration(now - start)})</Text>)
+    rows.push(term
+      ? <Text key="working" color="claude">✻ Working… <Text dimColor>({duration(now - start)})</Text></Text>
+      : <Text key="working" dimColor>Working… ({duration(now - start)})</Text>)
   }
   return rows
 }
@@ -324,12 +282,13 @@ function renderBlocks($: EngineInterface, task: Task, entries: Entry[], cwd: str
 // One call inside an opened group, as Claude Code lists them: a dim title
 // line that opens to the command and its output. The pane is the only thing
 // that scrolls, so long output opens in place with "Show all".
-function renderCall(item: Entry, key: string, id: string, open: string[], flip: (id: string) => unknown, cwd: string | null, ui: DesktopUI, width: number) {
+function renderCall(item: Entry, key: string, id: string, open: string[], flip: (id: string) => unknown, cwd: string | null, ui: UI, width: number, term: boolean) {
   const isOpen = open.includes(id)
   const { Box, Text, Button, Code } = ui
   switch (item.kind) {
     case 'command': {
-      const failed = item.exitCode !== null && item.exitCode !== 0
+      const failed = commandFailed(item)
+      const empty = noMatches(item)
       // Cut the title, not the chevron, to the frame's width.
       const room = Math.max(20, width - (failed ? 10 : 2))
       const firstLine = item.command.split('\n')[0]!
@@ -343,7 +302,8 @@ function renderCall(item: Entry, key: string, id: string, open: string[], flip: 
         <Box flexDirection="column" gap={1}>
           <Button key={`c-${key}`} plain dimColor onPress={() => flip(id)}>
             {title}
-            {failed && <Text color="error"> · exit {item.exitCode}</Text>}
+            {failed && (term ? ` · exit ${item.exitCode}` : <Text color="error"> · exit {item.exitCode}</Text>)}
+            {empty && ' · no matches'}
             {isOpen ? ' ▾' : ' ▸'}
           </Button>
           {isOpen && (
@@ -355,7 +315,7 @@ function renderCall(item: Entry, key: string, id: string, open: string[], flip: 
                   {showAll ? 'Show less' : `… +${out.hidden} lines`}
                 </Button>
               )}
-              {!out && <Text size="footnote" color="inactive">(No output)</Text>}
+              {!out && !empty && <Text size="footnote" color="inactive">(No output)</Text>}
             </Box>
           )}
         </Box>
@@ -380,14 +340,17 @@ function renderCall(item: Entry, key: string, id: string, open: string[], flip: 
   }
 }
 
-function renderStatus(b: Extract<Block, { kind: 'status' }>, ui: UI) {
+function renderStatus(b: Extract<Block, { kind: 'status' }>, ui: UI, term: boolean) {
   const { Box, Text } = ui
   const took = b.startedAt !== null ? ` in ${duration(b.entry.t - b.startedAt)}` : ''
   const word = b.entry.status === 'done' ? 'Done' : b.entry.status === 'failed' ? 'Failed' : 'Cancelled'
+  const done = b.entry.status === 'done'
   return (
     <Box flexDirection="column">
-      <Text color={b.entry.status === 'done' ? undefined : STATUS_COLOR[b.entry.status]} dimColor={b.entry.status === 'done'}>{word}{took}</Text>
-      {b.entry.error && <Text color="error">{b.entry.error}</Text>}
+      {term
+        ? <Text color={STATUS_COLOR[b.entry.status]}>✻ {word}{took}</Text>
+        : <Text color={done ? undefined : STATUS_COLOR[b.entry.status]} dimColor={done}>{word}{took}</Text>}
+      {b.entry.error && (term ? resultRow(ui, <Text color="error">{b.entry.error}</Text>) : <Text color="error">{b.entry.error}</Text>)}
     </Box>
   )
 }

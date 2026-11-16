@@ -119,27 +119,6 @@ export function clip(text: string, max: number): string {
 // Theme colors for each status.
 export const STATUS_COLOR: Record<Status, string> = { running: 'claude', done: 'success', failed: 'error', cancelled: 'inactive' }
 
-// Local wall-clock time, HH:MM:SS.
-export function clock(t: number): string {
-  const d = new Date(t)
-  return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':')
-}
-
-export type Turn = { opener: Extract<Entry, { kind: 'brief' | 'follow_up' }> | null; items: Entry[] }
-
-// Splits a transcript into turns: each brief or follow-up starts one.
-export function turns(entries: Entry[]): Turn[] {
-  const out: Turn[] = []
-  for (const e of entries) {
-    if (e.kind === 'brief' || e.kind === 'follow_up') out.push({ opener: e, items: [] })
-    else {
-      if (!out.length) out.push({ opener: null, items: [] })
-      out[out.length - 1]!.items.push(e)
-    }
-  }
-  return out
-}
-
 // The first lines of a command's output, as Claude Code shows a tool result;
 // more when the command failed.
 export function outputHead(output: string | null, failed: boolean, keep = failed ? 10 : 3): { text: string; hidden: number } | null {
@@ -200,13 +179,24 @@ export function blocks(entries: Entry[]): Block[] {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
+const SEARCH = /^(rg|grep|egrep|fgrep|git grep|ag|ack)\b/
+
+// A search that found nothing exits 1 with no output: not a failure.
+export function noMatches(c: Extract<Entry, { kind: 'command' }>): boolean {
+  return c.exitCode === 1 && !(c.output ?? '').trim() && (!!c.title?.startsWith('Searched') || SEARCH.test(c.command.trim()))
+}
+
+export function commandFailed(c: Extract<Entry, { kind: 'command' }>): boolean {
+  return c.exitCode !== null && c.exitCode !== 0 && !noMatches(c)
+}
+
 // One line for a group: "Ran 3 commands, edited 2 files", or "Edited a.ts"
 // for a single file, with line counts and failures beside it.
-export function summary(items: Action[]): { text: string; added: number; removed: number; failed: number } {
+export function summary(items: Action[]): { text: string; added: number; removed: number; failed: number; calls: number } {
   const commands = items.filter(i => i.kind === 'command')
   const files = items.flatMap(i => (i.kind === 'edit' ? i.files : []))
   const tools = items.filter(i => i.kind === 'tool')
-  const failed = commands.filter(c => c.exitCode !== null && c.exitCode !== 0).length + tools.filter(t => t.status === 'failed').length
+  const failed = commands.filter(commandFailed).length + tools.filter(t => t.status === 'failed').length
   const added = files.reduce((n, f) => n + (f.added ?? 0), 0)
   const removed = files.reduce((n, f) => n + (f.removed ?? 0), 0)
   const paths = [...new Set(files.map(f => f.path))]
@@ -221,7 +211,7 @@ export function summary(items: Action[]): { text: string; added: number; removed
     const joined = parts.join(', ')
     text = joined.charAt(0).toUpperCase() + joined.slice(1)
   }
-  return { text, added, removed, failed }
+  return { text, added, removed, failed, calls: commands.length + tools.length }
 }
 
 export function duration(ms: number): string {

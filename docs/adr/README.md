@@ -23,4 +23,5 @@ Read these before changing anything they cover. To change a decision, add a new 
 | 17 | [Runtime layout and lifetimes](0017-runtime-layout-and-lifetimes.md) | Accepted |
 | 18 | [Tasks can be named by label](0018-name-tasks-by-label.md) | Accepted |
 | 19 | [Added state fields keep the format](0019-additive-state-fields.md) | Accepted |
-| 20 | [The transcript view follows the host's look](0020-transcript-follows-host.md) | Accepted |
+| 20 | [The transcript view follows the host's look](0020-transcript-follows-host.md) | Superseded in part by ADR 21 |
+| 21 | [The terminal folds tool calls too, and the view follows the theme](0021-terminal-folds-and-theme.md) | Accepted |

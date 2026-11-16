@@ -1,6 +1,6 @@
 # 20. The transcript view follows the host's look
 
-- Status: Accepted
+- Status: Superseded in part by ADR 21
 - Date: 2026-11-16
 
 ## Context
