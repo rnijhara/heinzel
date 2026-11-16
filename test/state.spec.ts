@@ -2,7 +2,7 @@
 // handshake with an older helper.
 
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { describe, test } from 'node:test'
 import { RpcPeer } from '../src/shared/jsonrpc.ts'
@@ -108,7 +108,6 @@ describe('version handshake', () => {
     const h = tempDir()
     const env = testEnv(h.dir)
     const p = paths(env)
-    const { mkdirSync } = await import('node:fs')
     mkdirSync(p.dir, { recursive: true })
     let askedToStop = false
     // A stand-in for an older helper.
