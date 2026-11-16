@@ -1,4 +1,4 @@
-// /heinzel-setup's helper script (M5, ADR-0005). Bundled to dist/setup.mjs.
+// /heinzel-setup's helper script (ADR 5). Bundled to dist/setup.mjs.
 //
 //   node setup.mjs check [--settings <file>]   report prerequisites and settings (JSON)
 //   node setup.mjs apply [--settings <file>]   add the two backgrounding settings

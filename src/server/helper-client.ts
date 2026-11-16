@@ -1,5 +1,5 @@
 // The relay's connection to the shared helper: connects, starts the helper
-// when none is running, and handles the version handshake (ADR-0004).
+// when none is running, and handles the version handshake (ADR 4).
 
 import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
@@ -97,7 +97,7 @@ export class HelperClient extends EventEmitter {
       }
       if (hello.version !== VERSION && !restarted) {
         // A different helper version is running. Restart it if it's idle;
-        // otherwise keep using it while the protocol matches (ADR-0004).
+        // otherwise keep using it while the protocol matches (ADR 4).
         const res = await peer.request<{ stopping: boolean }>('shutdown', { reason: `relay ${VERSION} replaces helper ${hello.version}` }).catch(() => ({ stopping: false }))
         if (res.stopping) {
           this.log(`asked helper ${hello.version} to restart for ${VERSION}`)

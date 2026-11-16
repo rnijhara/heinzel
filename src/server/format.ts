@@ -1,5 +1,5 @@
 // How tool results read to Claude. Each result names the task, its status and a
-// "Then:" line saying what to do next (ADR-0006). Product text.
+// "Then:" line saying what to do next (ADR 6). Product text.
 
 import type { Roster, TaskRecord, TranscriptEntry, TranscriptResult } from '../shared/protocol.ts'
 

@@ -1,59 +1,35 @@
 # AGENTS.md
 
-Guidance for coding agents (and humans) working in this repository.
+Heinzel is a Claude Code plugin that hands work to other coding agents (Codex first) and wakes Claude when it's done. It has an MCP server that holds the logic, and a display-only mod that works without it.
 
-## What this project is
-
-Heinzel is a Claude Code plugin that lets Claude hand work to other coding agents and get woken up when that work is done. Codex is the first agent it supports. The design is meant to stay agent-agnostic so others can be added later.
-
-The plugin has two parts:
-
-- **An MCP server** that holds all the logic: it starts tasks, tracks them, and returns results.
-- **A display-only mod** that shows the tasks in Claude Code. Everything works without it.
-
-Version 0.1.0 is built: M1–M5 in `docs/plan.md`. The code is laid out like this:
-
+## Layout
 - `src/server/`: the per-session relay, which is the MCP server. It holds the tools, the server instructions and the tasks extension.
 - `src/helper/`: the shared helper. It drives `codex app-server` and writes the state files.
-- `src/shared/`: paths, JSON-RPC and the relay-to-helper protocol.
-- `src/setup/`: the script behind `/heinzel-setup`.
-- `mod/`: the display mod, loaded by `hooks/hooks.json`.
-- `test/`: the Node tests (`*.spec.ts`), the fake app-server and the live end-to-end driver.
-- `mod/*.test.tsx`: the mod's tests, run by `claude plugin test`.
+- `src/shared/`: paths, JSON-RPC, and the relay-to-helper protocol.
+- `src/setup/`: the script behind `/heinzel-setup` (`commands/heinzel-setup.md`).
+- `mod/`: the display mod, loaded by `hooks/hooks.json`. It reads state and draws it, nothing more.
+- `test/`: Node tests (`*.spec.ts`), the fake app-server, and live runs (`test/live/`).
+- `protocol/codex/<version>/`: Codex's generated schema and types. Never edit these by hand.
 
-Run `npm run check` before committing. Mod changes also need `claude plugin validate .` and `claude plugin test .`.
+## Checks
+- `npm run check`: types, tests and protocol drift.
+- For mod changes, also `claude plugin validate .` and `claude plugin test .`.
+- Live runs (`test/live/`) cost tokens. Run them only when asked, or for a new Claude Code or Codex release.
 
-## How we make decisions: ADRs
+## Decisions (ADRs in `docs/adr/`)
+- **ADRs are binding.** Check `docs/adr/README.md` before changing anything an ADR covers. If the code and an ADR disagree, stop and ask.
+- **When to write one:** a choice that is hard to reverse, changes a public interface (tool names, inputs, outputs), or depends on Claude Code or Codex behaviour. Also any choice that would leave a future reader asking "why?". Routine code choices don't need one.
+- **Format:** the next free number, `docs/adr/NNNN-short-title.md`, following `template.md`: Status, Date, Context, Decision, Consequences.
+  - One screen at most, in plain words.
+  - Name any Claude Code or Codex fact the decision relies on, with the version checked.
+  - Add a row to `docs/adr/README.md`.
+- **Never rewrite an accepted ADR.** To change one, write a new ADR with a `Supersedes: ADR N` line, and mark the old one "Superseded by ADR M" (or "in part") in the file and in the README. Status is the only edit allowed to an accepted ADR.
+- **Undecided items go in `docs/open-questions.md`,** not in an ADR. Don't build as if they were decided.
+- **The ADR goes in the same commit as the code it describes.**
 
-Every significant decision is recorded as an Architecture Decision Record (ADR) in `docs/adr/`. Read the ADRs before changing anything they cover, and write one before making a decision they should cover.
-
-### When to write an ADR
-
-Write one for a decision that:
-
-- shapes the architecture, a public interface (tool names, inputs, outputs), or how the plugin talks to Claude Code or an agent
-- would surprise a new contributor, or was chosen over a reasonable alternative
-- depends on a fact that may change, such as a Claude Code or Codex behaviour, a version or a feature flag
-
-Bug fixes, refactors and small implementation choices don't need one.
-
-### How to write one
-
-1. Copy `docs/adr/template.md` to `docs/adr/NNNN-short-title.md`, using the next free four-digit number.
-2. Fill in the context, the decision, the alternatives you considered and the consequences. Say what was verified and how (version, test, docs).
-3. Set the status to `Proposed` while it's under discussion and `Accepted` once agreed.
-4. Add it to the index in `docs/adr/README.md`.
-
-### Changing a decision
-
-Don't rewrite an accepted ADR. Write a new one that supersedes it, and set the old one's status to `Superseded by ADR-NNNN`. Typo fixes, and notes that a verified fact has changed, may be edited in place, with a dated line in the ADR's history.
-
-### Statuses
-
-`Proposed` → `Accepted` → `Superseded by ADR-NNNN` or `Deprecated`.
-
-## Conventions
-
-- Keep the plugin's logic out of the mod. The mod reads state and draws it, nothing more (ADR-0002).
-- Tool descriptions and server instructions are part of the product. Change them with the same care as code, and keep them short and rule-like (ADR-0007).
-- Version-specific facts about Claude Code or Codex go in the ADR that depends on them, with the version they were checked on.
+## Writing
+- Be concise everywhere: ADRs, docs, comments, tool text.
+- Say it once, in plain words. Cut anything a reader wouldn't miss.
+- No plans, milestone names or status logs in the repo. Git history holds what happened.
+- Tool descriptions and server instructions are product text. Keep them short and rule-like, and try changes in a real session.
+- Never mention other orchestration products in the repo.

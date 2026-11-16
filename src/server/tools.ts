@@ -1,4 +1,4 @@
-// The six tools (ADR-0006). Names, inputs and descriptions are a public
+// The six tools (ADR 6). Names, inputs and descriptions are a public
 // interface: renaming one needs a new ADR.
 
 import * as z from 'zod'

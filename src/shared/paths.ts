@@ -1,14 +1,14 @@
-// Where Heinzel keeps its files (ADR-0017).
+// Where Heinzel keeps its files (ADR 17).
 //
 //   $HEINZEL_HOME (default ~/.heinzel)/
 //     <account>/            one folder per agent account, e.g. codex-1a2b3c4d5e
 //       account.json        which agent and home this folder belongs to
-//       tasks.json          the task index the mod reads (ADR-0012)
+//       tasks.json          the task index the mod reads (ADR 12)
 //       tasks/<id>.jsonl    one transcript per task
-//       helper.lock         held by the running helper (ADR-0004)
+//       helper.lock         held by the running helper (ADR 4)
 //       helper.sock         the helper's socket (moved to the temp dir if the path is too long)
 //       helper.log          the helper's log
-//     worktrees/<repo>-<hash>/<task-id>   worktrees for `worktree: true` (ADR-0010)
+//     worktrees/<repo>-<hash>/<task-id>   worktrees for `worktree: true` (ADR 10)
 
 import { createHash } from 'node:crypto'
 import { homedir, tmpdir } from 'node:os'

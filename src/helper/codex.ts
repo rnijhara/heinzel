@@ -1,6 +1,6 @@
 // The Codex adapter: owns one `codex app-server` process and speaks its
-// JSON-RPC protocol (ADR-0003). It answers every request Codex sends back so a
-// task never waits on a person (ADR-0008).
+// JSON-RPC protocol (ADR 3). It answers every request Codex sends back so a
+// task never waits on a person (ADR 8).
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
@@ -18,7 +18,7 @@ import type {
 } from '../../protocol/codex/0.167.2/ts/v2/index.ts'
 
 // How long a control request (thread/start, turn/start, ...) may take before
-// the app-server is treated as hung and retired (ADR-0004).
+// the app-server is treated as hung and retired (ADR 4).
 const CONTROL_TIMEOUT_MS = 60_000
 
 export interface CodexOptions {

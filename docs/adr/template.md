@@ -1,24 +1,13 @@
-# ADR-NNNN: Title
+# N. Title
 
-- **Status:** Proposed
-- **Date:** YYYY-MM-DD
+- Status: Accepted
+- Date: YYYY-MM-DD
 
 ## Context
-
-What problem are we solving, and what constraints and facts matter? Note how each fact was verified (version, test, docs).
+What forces the decision, in a few lines. Name any Claude Code or Codex fact it relies on, with the version checked.
 
 ## Decision
-
-What we will do, stated plainly.
-
-## Alternatives considered
-
-- **Option:** why we didn't pick it.
+What we do, in plain words.
 
 ## Consequences
-
-What becomes easier, what becomes harder, and what we'll have to revisit.
-
-## History
-
-- YYYY-MM-DD: Proposed.
+What follows, good and bad.

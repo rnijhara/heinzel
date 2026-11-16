@@ -1,5 +1,5 @@
 // The shared helper: one per agent account, serving every session's relay over
-// a local socket (ADR-0004). Started on demand by the first relay that needs it.
+// a local socket (ADR 4). Started on demand by the first relay that needs it.
 
 import { appendFileSync, closeSync, openSync, readFileSync, rmSync, statSync, truncateSync, writeSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
@@ -11,7 +11,7 @@ import { DEFAULT_RETENTION_DAYS, StateStore, ensureDir } from './state.ts'
 import { TaskManager } from './tasks.ts'
 
 // The helper exits after this long with no relays connected and no tasks
-// running (ADR-0017).
+// running (ADR 17).
 export const DEFAULT_IDLE_MS = 10 * 60 * 1000
 const PRUNE_EVERY_MS = 60 * 60 * 1000
 const LOG_LIMIT = 1024 * 1024
@@ -89,7 +89,7 @@ export async function runHelper(opts: HelperOptions = {}) {
     }
   }
 
-  // Sends a task's events to the relays of the session that owns it (ADR-0004).
+  // Sends a task's events to the relays of the session that owns it (ADR 4).
   const route = (task: TaskRecord, method: string, params: unknown) => {
     for (const [peer, info] of relays) {
       if (task.sessionId && info.sessionId === task.sessionId) peer.notify(method, params)

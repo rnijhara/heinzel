@@ -1,4 +1,4 @@
-// State files (ADR-0012), the lock (ADR-0004) and the relay's version
+// State files (ADR 12), the lock (ADR 4) and the relay's version
 // handshake with an older helper.
 
 import assert from 'node:assert/strict'

@@ -1,6 +1,6 @@
 // The MCP tasks extension (`io.modelcontextprotocol/tasks`, protocol revision
 // 2026-07-28), implemented at the transport because SDK v2 has no support for
-// it (ADR-0005, ADR-0015).
+// it (ADR 5, ADR 15).
 //
 // When Claude Code's `tools/call` for dispatch or follow_up says it supports
 // tasks, we answer at once with a task and serve `tasks/get` and

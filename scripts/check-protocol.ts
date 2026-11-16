@@ -1,4 +1,4 @@
-// Protocol drift check (ADR-0016): regenerates Codex's JSON Schema and
+// Protocol drift check (ADR 16): regenerates Codex's JSON Schema and
 // TypeScript types from the installed Codex CLI and compares them with the
 // copy checked in under protocol/codex/<version>/. Exits non-zero on any
 // difference, or when the installed version has no folder yet.

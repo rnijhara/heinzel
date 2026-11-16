@@ -4,7 +4,7 @@ Hand work from Claude Code to other coding agents, and get woken up when it's do
 
 <!-- TODO: add the wizard meme here (with Codex in the caption). -->
 
-> **Status: 0.1.0, built and tested on Claude Code 2.1.325 and Codex CLI 0.167.2.** It isn't published to a marketplace yet. Try it from a local checkout (below). The design decisions are in [docs/adr](docs/adr/README.md), and the build plan is in [docs/plan.md](docs/plan.md).
+> **Status: 0.1.0, built and tested on Claude Code 2.1.325 and Codex CLI 0.167.2.** It isn't published to a marketplace yet. Try it from a local checkout (below). Decisions are in [docs/adr](docs/adr/README.md); open questions in [docs/open-questions.md](docs/open-questions.md).
 
 Named after the Heinzelmännchen of Cologne, house spirits who quietly finished people's work while they slept.
 
@@ -53,7 +53,7 @@ Tasks run unattended. Codex's automatic review handles approvals, and a task nev
    }
    ```
 
-   These make Claude Code move a dispatched task to the background after about a second. They apply to every MCP server, so any MCP call that takes longer than a second will also finish in the background. Without them, a dispatch makes Claude wait until the task is done, and the result tells Claude what to add. Once Claude Code turns on MCP tasks for your sessions, Heinzel uses them automatically, and you can remove these settings. [ADR-0005](docs/adr/0005-background-execution-and-wake.md) explains why.
+   These make Claude Code move a dispatched task to the background after about a second. They apply to every MCP server, so any MCP call that takes longer than a second will also finish in the background. Without them, a dispatch makes Claude wait until the task is done, and the result tells Claude what to add. Once Claude Code turns on MCP tasks for your sessions, Heinzel uses them automatically, and you can remove these settings. [ADR 5](docs/adr/0005-background-execution-and-wake.md) explains why.
 
 4. Ask for some work, for example: "Use Codex (gpt-6-luna, low effort) to add a `--verbose` flag to the CLI, in its own worktree." Open the panel with `/heinzel`.
 
@@ -79,7 +79,7 @@ Stopping a dispatched task from Claude Code's task list (or with TaskStop) cance
 
 ## Where things live
 
-Heinzel keeps its files in `~/.heinzel`, or in `$HEINZEL_HOME` if you set it ([ADR-0017](docs/adr/0017-runtime-layout-and-lifetimes.md)):
+Heinzel keeps its files in `~/.heinzel`, or in `$HEINZEL_HOME` if you set it ([ADR 17](docs/adr/0017-runtime-layout-and-lifetimes.md)):
 
 - **Tasks:** `~/.heinzel/codex-<id>/tasks.json` and `tasks/<task-id>.jsonl`. Finished tasks are kept for 7 days (`HEINZEL_RETENTION_DAYS` changes that).
 - **Helper log:** `~/.heinzel/codex-<id>/helper.log`. The shared helper runs Codex for every session, and exits after 10 idle minutes (`HEINZEL_IDLE_MS` changes that).

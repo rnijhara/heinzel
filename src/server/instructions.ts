@@ -1,5 +1,5 @@
 // Heinzel's orchestration rules, sent as the MCP server's instructions so they
-// sit in Claude's system prompt (ADR-0007). Product text: change it with care,
+// sit in Claude's system prompt (ADR 7). Product text: change it with care,
 // keep it short and rule-like, and test changes in real sessions.
 
 export const INSTRUCTIONS = `Heinzel hands self-contained tasks to other coding agents (Codex today) and wakes you when each one finishes.

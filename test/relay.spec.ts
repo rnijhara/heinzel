@@ -1,6 +1,6 @@
 // Layer 3: the real relay and helper processes against the fake app-server,
 // driven over stdio the way Claude Code 2.1.325 drives an MCP server
-// (wire format from test/fixtures/claude-code-2.1.325). ADR-0016.
+// (wire format from test/fixtures/claude-code-2.1.325). ADR 16.
 
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -167,7 +167,7 @@ describe('relay with MCP tasks (io.modelcontextprotocol/tasks)', () => {
   })
 })
 
-describe('shared helper (ADR-0004)', () => {
+describe('shared helper (ADR 4)', () => {
   test('two sessions share one helper, and events go only to the owning session', async () => {
     const home = tempDir()
     const base = testEnv(home.dir)

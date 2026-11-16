@@ -1,25 +1,14 @@
-# ADR-0013: Dispatch from subagents blocks
+# 13. Dispatch from subagents blocks
 
-- **Status:** Accepted
-- **Date:** 2026-11-16
+- Status: Accepted
+- Date: 2026-11-16
 
 ## Context
-
-Claude Code moves only the main conversation's MCP calls to the background. Calls made inside a subagent always run to completion (Claude Code docs, checked on 2.1.325). A `dispatch` from a subagent therefore blocks that subagent until the agent finishes.
+Claude Code never moves a subagent's MCP calls to the background (Claude Code 2.1.325 docs).
 
 ## Decision
-
-Subagents may call `dispatch` and `follow_up`. The call blocks until the task ends, and the result returns inline. This is documented, and we don't work around it.
-
-## Alternatives considered
-
-- **Refusing dispatch from subagents:** takes away a useful pattern (for example, a subagent that fans out to another agent) to avoid a delay the subagent can usually afford.
+- Subagents may call `dispatch` and `follow_up`; the call blocks until the task ends.
+- The relay sends progress notifications so a long task doesn't hit the idle timeout.
 
 ## Consequences
-
-- A subagent that dispatches long work holds its slot until the work ends.
-- The per-call time limits (`MCP_TOOL_TIMEOUT`, `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`) still apply. The helper sends progress notifications so a long task doesn't hit the idle timeout.
-
-## History
-
-- 2026-11-16: Accepted.
+A subagent that dispatches long work is busy until the work ends.

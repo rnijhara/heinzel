@@ -1,4 +1,4 @@
-// Bundles the relay and the helper into single files under dist/ (ADR-0015).
+// Bundles the relay and the helper into single files under dist/ (ADR 15).
 import { build } from 'esbuild'
 import { fileURLToPath } from 'node:url'
 

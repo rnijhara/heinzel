@@ -1,4 +1,4 @@
-// Optional git worktree per task (ADR-0010).
+// Optional git worktree per task (ADR 10).
 
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'

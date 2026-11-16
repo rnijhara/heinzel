@@ -1,26 +1,15 @@
-# ADR-0001: Record decisions as ADRs
+# 1. Record decisions as ADRs
 
-- **Status:** Accepted
-- **Date:** 2026-11-16
+- Status: Accepted
+- Date: 2026-11-16
 
 ## Context
-
-Heinzel depends on behaviour in Claude Code and Codex that changes quickly: feature flags, environment variables, protocol revisions. Many of our choices are workarounds for how things are today. Without a record, nobody will know which parts can go once the platform catches up.
+Heinzel leans on Claude Code and Codex behaviour that changes often. Without a record, nobody knows which choices are workarounds that can go later.
 
 ## Decision
-
-We record every significant decision as an Architecture Decision Record in `docs/adr/`, following the process in `AGENTS.md`. Each ADR states the facts it relies on and how they were verified, so it can be revisited when those facts change.
-
-## Alternatives considered
-
-- **A single design doc:** easier to read once, but it hides when and why each choice was made, and it drifts out of date silently.
-- **Decisions in commit messages or issues only:** hard to find, and it mixes decisions with implementation detail.
+- Every significant decision gets a short record in `docs/adr/`, numbered in order. `AGENTS.md` says when and how.
+- Each record names the facts it relies on and the version they were checked on.
+- An accepted record is never rewritten. A changed decision gets a new record.
 
 ## Consequences
-
-- Contributors read the ADRs before changing anything they cover.
-- Changing a decision means writing a new ADR that supersedes the old one.
-
-## History
-
-- 2026-11-16: Accepted.
+Read `docs/adr/` before changing anything it covers.

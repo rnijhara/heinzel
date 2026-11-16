@@ -1,5 +1,5 @@
 // The per-session relay: an MCP server over stdio that serves Heinzel's tools
-// and forwards every call to the shared helper (ADR-0002, ADR-0004).
+// and forwards every call to the shared helper (ADR 2, ADR 4).
 
 import { randomBytes } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/server'
@@ -17,7 +17,7 @@ const HEARTBEAT_MS = 20_000
 export const SETTINGS_NOTE = 'Note: Heinzel\'s background settings aren\'t set, so this call may have kept you waiting until the task finished. To let dispatch run in the background, the user can run /heinzel-setup, or add this to ~/.claude/settings.json and restart Claude Code: {"env": {"CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS": "1000", "CLAUDE_AUTO_BACKGROUND_TASKS": "1"}}'
 
 // Whether Claude Code was started with the settings that move a dispatch to
-// the background after about a second (ADR-0005). MCP servers inherit Claude
+// the background after about a second (ADR 5). MCP servers inherit Claude
 // Code's environment, including the `env` block of settings.json.
 export function backgroundSettingsMissing(env: NodeJS.ProcessEnv): boolean {
   const ms = Number(env.CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS)

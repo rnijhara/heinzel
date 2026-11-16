@@ -1,4 +1,4 @@
-// A fake `codex app-server` for tests (ADR-0016). It speaks the same
+// A fake `codex app-server` for tests (ADR 16). It speaks the same
 // newline-delimited JSON-RPC over stdio, and validates every message it sends
 // against the checked-in Codex schema, so it can't drift from real Codex.
 //

@@ -1,6 +1,6 @@
-// Heinzel's display mod (ADR-0011): a side panel listing tasks and their
+// Heinzel's display mod (ADR 11): a side panel listing tasks and their
 // transcripts, and a band above the input while tasks run. It only reads the
-// helper's state files (ADR-0012, ADR-0017) and never writes them.
+// helper's state files (ADR 12, ADR 17) and never writes them.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'

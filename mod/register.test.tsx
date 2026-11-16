@@ -1,4 +1,4 @@
-// The display mod against seeded state files (ADR-0016 layer 3).
+// The display mod against seeded state files (ADR 16 layer 3).
 // Run with: claude plugin test .
 
 import { expect, test } from 'claude-code/testing'

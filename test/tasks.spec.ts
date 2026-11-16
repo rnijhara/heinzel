@@ -1,4 +1,4 @@
-// Layer 1: the helper's task manager against the fake app-server (ADR-0016).
+// Layer 1: the helper's task manager against the fake app-server (ADR 16).
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -22,7 +22,7 @@ function setup(extra: Record<string, string> = {}) {
   return { dir, env, p, store, tm, lines, cleanup: () => { tm.shutdown(); cleanup() } }
 }
 
-describe('server request answers (ADR-0008)', () => {
+describe('server request answers (ADR 8)', () => {
   test('approvals are declined and questions get no answer', () => {
     assert.deepEqual(answerServerRequest('item/commandExecution/requestApproval', {}), { decision: 'decline' })
     assert.deepEqual(answerServerRequest('item/fileChange/requestApproval', {}), { decision: 'decline' })
@@ -126,7 +126,7 @@ describe('task manager with the fake app-server', () => {
     assert.throws(() => s.tm.status('kswpljim8'), /looks like Claude Code's background task id/)
   })
 
-  test('tasks can be named by label (ADR-0018)', async () => {
+  test('tasks can be named by label (ADR 18)', async () => {
     const a = await s.tm.dispatch({ brief: 'Sleep [slow:5000]', label: 'Sleeper', cwd: s.dir, sessionId: 'S1' })
     const other = await s.tm.dispatch({ brief: 'Other session [slow:5000]', label: 'Sleeper', cwd: s.dir, sessionId: 'S2' })
     assert.equal(s.tm.status('sleeper', 'S1').id, a.id, 'case-insensitive, and the asking session wins')
@@ -158,7 +158,7 @@ describe('task manager with the fake app-server', () => {
   })
 })
 
-describe('app-server health (ADR-0004)', () => {
+describe('app-server health (ADR 4)', () => {
   test('a crash fails the running task and the next dispatch starts a fresh app-server', async () => {
     const s = setup()
     try {
@@ -187,7 +187,7 @@ describe('app-server health (ADR-0004)', () => {
   })
 })
 
-describe('worktrees (ADR-0010)', () => {
+describe('worktrees (ADR 10)', () => {
   test('an unchanged worktree is removed; a changed one is kept on its branch', async () => {
     const s = setup()
     try {

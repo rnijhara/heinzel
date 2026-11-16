@@ -1,5 +1,5 @@
 // Task lifecycle: start a Codex thread per task, follow its events into the
-// transcript, and report when each turn ends (ADR-0004, ADR-0008, ADR-0012).
+// transcript, and report when each turn ends (ADR 4, ADR 8, ADR 12).
 
 import { randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
@@ -21,7 +21,7 @@ import type { StateStore } from './state.ts'
 import { createWorktree, removeIfUnchanged, restoreWorktree } from './worktree.ts'
 import type { ThreadItem, Turn } from '../../protocol/codex/0.167.2/ts/v2/index.ts'
 
-// Sent to every task as developer instructions (ADR-0008).
+// Sent to every task as developer instructions (ADR 8).
 export const CHILD_RULES = [
   'You are running a task handed to you by another coding agent. Nobody is watching this session.',
   '- Do the work yourself. Do not hand it off to other agents.',
@@ -118,7 +118,7 @@ export class TaskManager extends EventEmitter {
     }
   }
 
-  // --- Roster (ADR-0009) --------------------------------------------------
+  // --- Roster (ADR 9) --------------------------------------------------
 
   async roster(): Promise<Roster> {
     return { agents: [await this.codexRoster()] }
@@ -290,7 +290,7 @@ export class TaskManager extends EventEmitter {
     return this.store.all().filter(t => !sessionId || t.sessionId === sessionId)
   }
 
-  // Finds a task by id, or by label (ADR-0018). A label prefers the asking
+  // Finds a task by id, or by label (ADR 18). A label prefers the asking
   // session's tasks, then running ones, then the newest. While a dispatch runs
   // in the background Claude only knows its label, not its id.
   resolve(ref: string, sessionId?: string): TaskRecord {

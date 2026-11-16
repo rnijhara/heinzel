@@ -1,4 +1,4 @@
-// Task state on disk, read by the mod and by a restarted helper (ADR-0012).
+// Task state on disk, read by the mod and by a restarted helper (ADR 12).
 // The index is rewritten atomically; transcripts are append-only.
 
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'

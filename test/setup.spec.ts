@@ -1,4 +1,4 @@
-// /heinzel-setup's script (M5). Never touches the real ~/.claude/settings.json.
+// /heinzel-setup's script. Never touches the real ~/.claude/settings.json.
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live check of the MCP tasks path (ADR-0005, ADR-0016 layer 4).
+"""Live check of the MCP tasks path (ADR 5, ADR 16 layer 4).
 
 MCP tasks are behind a feature flag in Claude Code. On the account this was
 built on, they only turn on in an interactive terminal with feature-flag

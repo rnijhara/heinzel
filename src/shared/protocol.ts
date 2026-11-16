@@ -1,5 +1,5 @@
 // The messages between a session's relay (the MCP server) and the shared
-// helper, and the task record both sides and the mod share (ADR-0004, ADR-0012).
+// helper, and the task record both sides and the mod share (ADR 4, ADR 12).
 
 export const VERSION = '0.1.0'
 

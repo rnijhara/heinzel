@@ -1,6 +1,6 @@
 // Pure helpers for the display mod: parsing the helper's state files and
 // summarising them. No engine calls here, so plain tests can cover it.
-// The mod only reads state (ADR-0002, ADR-0011, ADR-0012).
+// The mod only reads state (ADR 2, ADR 11, ADR 12).
 
 export const STATE_FORMAT = 1
 

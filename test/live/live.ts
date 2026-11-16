@@ -1,5 +1,5 @@
 // Layer 4: live end-to-end runs with real Claude Code and real Codex
-// (ADR-0016). Manual or scheduled only: each run spends Claude and Codex tokens.
+// (ADR 16). Manual or scheduled only: each run spends Claude and Codex tokens.
 //
 //   npm run build
 //   node test/live/live.ts [scenario ...]        (default: all)
