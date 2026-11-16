@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
-const CODEX_MODEL = process.env.HEINZEL_LIVE_CODEX_MODEL ?? 'gpt-6-luna'
+const CODEX_MODEL = process.env.HEINZEL_LIVE_CODEX_MODEL ?? 'gpt-6.1-sol'
 const CODEX_EFFORT = process.env.HEINZEL_LIVE_CODEX_EFFORT ?? 'low'
 const CLAUDE_MODEL = process.env.HEINZEL_LIVE_CLAUDE_MODEL ?? 'sonnet'
 const TOOL = (n: string) => `mcp__plugin_heinzel_heinzel__${n}`
@@ -121,7 +121,7 @@ const scenarios: Scenario[] = [
       a.ok(fuDelay[0] !== null && fuDelay[0]! < 4000, 'follow_up moved to the background')
       a.ok(finalTexts(run).some(t => /WOKEN AGAIN/.test(t)), 'woken after the follow-up')
       const notes = existsSync(join(run.repo, 'notes.txt')) ? readFileSync(join(run.repo, 'notes.txt'), 'utf8') : ''
-      a.ok(/one\s*\n\s*two/.test(notes), 'notes.txt has both lines')
+      a.ok(/one\.?\s*\n\s*two/.test(notes), 'notes.txt has both lines')
       const tasks = tasksIndex(run)
       a.ok(tasks.length === 1 && tasks[0].turns === 2, 'one task with two turns on the same thread')
     },

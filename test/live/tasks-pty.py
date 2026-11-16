@@ -14,7 +14,7 @@ Usage: python3 test/live/tasks-pty.py   (run `npm run build` first)
 import json, os, pty, re, select, subprocess, sys, tempfile, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODEL = os.environ.get('HEINZEL_LIVE_CODEX_MODEL', 'gpt-6-luna')
+MODEL = os.environ.get('HEINZEL_LIVE_CODEX_MODEL', 'gpt-6.1-sol')
 work = os.path.realpath(tempfile.mkdtemp(prefix='hz-live-tasks-'))
 repo = os.path.join(work, 'repo')
 os.makedirs(repo)

@@ -55,7 +55,7 @@ Tasks run unattended. Codex's automatic review handles approvals, and a task nev
 
    These make Claude Code move a dispatched task to the background after about a second. They apply to every MCP server, so any MCP call that takes longer than a second will also finish in the background. Without them, a dispatch makes Claude wait until the task is done, and the result tells Claude what to add. Once Claude Code turns on MCP tasks for your sessions, Heinzel uses them automatically, and you can remove these settings. [ADR 5](docs/adr/0005-background-execution-and-wake.md) explains why.
 
-4. Ask for some work, for example: "Use Codex (gpt-6-luna, low effort) to add a `--verbose` flag to the CLI, in its own worktree." Open the panel with `/heinzel`.
+4. Ask for some work, for example: "Use Codex (gpt-6.1-sol, low effort) to add a `--verbose` flag to the CLI, in its own worktree." Open the panel with `/heinzel`.
 
 To install it rather than load it per session, add this folder as a local marketplace from inside Claude Code. Run `npm run build` first, because the plugin runs from `dist/`.
 
