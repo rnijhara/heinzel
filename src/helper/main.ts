@@ -157,21 +157,33 @@ export async function runHelper(opts: HelperOptions = {}) {
   pruner.unref()
   checkIdle()
 
+  // Runs one shutdown step; a failure (say, the state dir was deleted) is
+  // logged and never stops the helper from exiting.
+  const step = async (name: string, fn: () => unknown) => {
+    try {
+      await fn()
+    } catch (err) {
+      log(`shutdown step ${name} failed: ${(err as Error).message}`)
+    }
+  }
+
   const stop = async (why: string) => {
     if (stopping) return
     stopping = true
     log(`stopping: ${why}`)
     clearInterval(pruner)
     if (idleTimer) clearTimeout(idleTimer)
-    for (const t of tasks.list()) if (t.status === 'running') await tasks.recall(t.id).catch(() => {})
-    await tasks.shutdown()
-    store.close()
-    for (const peer of relays.keys()) peer.close()
-    server.close()
+    // Exit even if a step hangs.
+    setTimeout(() => process.exit(1), 30_000).unref()
+    for (const t of tasks.list()) if (t.status === 'running') await step(`recall ${t.id}`, () => tasks.recall(t.id))
+    await step('codex', () => tasks.shutdown())
+    await step('state', () => store.close())
+    await step('relays', () => { for (const peer of relays.keys()) peer.close() })
+    await step('server', () => server.close())
     log('stopped')
-    rmSync(p.socket, { force: true })
+    await step('socket', () => rmSync(p.socket, { force: true }))
     // Last: a missing lock means this helper has finished writing.
-    rmSync(p.lock, { force: true })
+    await step('lock', () => rmSync(p.lock, { force: true }))
     process.exit(0)
   }
   process.on('SIGTERM', () => void stop('SIGTERM'))

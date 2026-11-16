@@ -3,7 +3,7 @@
 // (wire format from test/fixtures/claude-code-2.1.325). ADR 16.
 
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { paths } from '../src/shared/paths.ts'
@@ -207,6 +207,25 @@ describe('shared helper (ADR 4)', () => {
       await until(() => !existsSync(p.lock), 5000)
     } finally {
       await teardown(env, [], home.cleanup)
+    }
+  })
+})
+
+describe('helper shutdown', () => {
+  test('the helper exits on SIGTERM even after its state dir was deleted', async () => {
+    const home = tempDir()
+    const env = testEnv(home.dir, { CLAUDE_CODE_SESSION_ID: 'gone' })
+    const r = startRelay(env, home.dir)
+    try {
+      await handshake(r, false)
+      await call(r, 'roster', {})
+      const pid = Number(readFileSync(paths(env).lock, 'utf8'))
+      await stopRelay(r)
+      rmSync(paths(env).home, { recursive: true, force: true })
+      process.kill(pid, 'SIGTERM')
+      await until(() => { try { process.kill(pid, 0); return false } catch { return true } }, 10000)
+    } finally {
+      await teardown(env, [r], home.cleanup)
     }
   })
 })
