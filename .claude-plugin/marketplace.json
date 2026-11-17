@@ -1,6 +1,11 @@
 {
   "name": "heinzel",
-  "owner": { "name": "Roopak Nijhara" },
+  "owner": {
+    "name": "Roopak Nijhara"
+  },
+  "metadata": {
+    "description": "Heinzel: hand work from Claude Code to other coding agents."
+  },
   "plugins": [
     {
       "name": "heinzel",

@@ -6,5 +6,13 @@
   "types": "./mod/types.d.ts",
   "author": {
     "name": "Roopak Nijhara"
-  }
+  },
+  "homepage": "https://github.com/rnijhara/heinzel",
+  "repository": "https://github.com/rnijhara/heinzel",
+  "keywords": [
+    "codex",
+    "delegation",
+    "agents",
+    "mcp"
+  ]
 }

@@ -4,6 +4,22 @@
   "private": true,
   "description": "Hand work from Claude Code to other coding agents, and get woken up when it's done.",
   "license": "MIT",
+  "author": "Roopak Nijhara",
+  "homepage": "https://github.com/rnijhara/heinzel#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rnijhara/heinzel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rnijhara/heinzel/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "codex",
+    "mcp",
+    "agents"
+  ],
   "type": "module",
   "engines": {
     "node": ">=22.18"
