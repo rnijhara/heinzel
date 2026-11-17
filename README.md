@@ -20,6 +20,18 @@ Named after the Heinzelmännchen of Cologne, house spirits who quietly finished 
 
 Tasks run unattended. Codex's automatic review handles approvals, and a task never stops to ask you a question: if it gets stuck, it says why, and Claude takes it from there.
 
+## The panel and the band
+
+Heinzel adds a small mod to Claude Code's interface, so you can see what Codex is doing.
+
+<p align="center">
+  <img src="docs/assets/panel.png" width="520" alt="Three crops from a terminal session. The band reads: Heinzel, 1 running, 1 done, with Open panel and close buttons. The panel lists two tasks, one running and one done. A task's transcript shows the brief, Codex's messages, a folded group of three commands and one edit, and the final message.">
+</p>
+
+- **The band** sits above the input while a task runs. It counts the tasks that are running and the ones that just finished or failed. One button opens the panel and one closes the band; the next task brings it back.
+- **The panel** opens with `/heinzel`. It lists every task with its status, age and latest line. Click one to read its transcript: the brief, Codex's messages, its commands and its edits.
+- **Display only:** the mod reads Heinzel's task files and draws them. It changes nothing, and dispatching works the same without it ([ADR 11](docs/adr/0011-display-mod.md)).
+
 ## Requirements
 
 - Claude Code 2.1.325 or later
